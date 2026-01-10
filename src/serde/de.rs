@@ -28,9 +28,11 @@ where
     let (ev, _mark) = deserializer.parser.next()?;
     assert_eq!(ev, Event::StreamStart);
 
-    let (ev, _mark) = deserializer.parser.next()?;
+    let (ev, _mark) = deserializer.parser.peek()?;
 
-    assert_eq!(ev, Event::DocumentStart);
+    if *ev == Event::DocumentStart {
+        deserializer.parser.next()?;
+    }
 
     T::deserialize(&mut deserializer)
 }
@@ -372,28 +374,25 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        visitor.visit_none()
+        let (ev, _mark) = self.parser.peek()?;
+
+        let is_some = match ev {
+            Event::MappingStart(_) | Event::SequenceStart(_) | Event::Scalar(_, _, _) => true,
+            _ => false,
+        };
+
+        if is_some {
+            visitor.visit_some(self)
+        } else {
+            visitor.visit_none()
+        }
     }
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        let (ev, _mark) = self.parser.next()?;
-
-        match ev {
-            Event::Scalar(value, _style, _anchor_id) => {
-                if value.is_empty() {
-                    visitor.visit_unit()
-                } else {
-                    Err(Error::invalid_value(
-                        Unexpected::Str(&value),
-                        &"an empty string",
-                    ))
-                }
-            }
-            _ => unreachable!(),
-        }
+        visitor.visit_unit()
     }
 
     fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value, Error>
@@ -642,6 +641,31 @@ foobar
     }
 
     #[test]
+    fn test_unit() {
+        assert_eq!((), from_str("").unwrap());
+
+        let input = r#"
+---
+"#;
+
+        assert_eq!((), from_str(input).unwrap());
+    }
+
+    #[test]
+    fn test_unit_struct() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test;
+
+        assert_eq!(Test, from_str("").unwrap());
+
+        let input = r#"
+---
+"#;
+
+        assert_eq!(Test, from_str(input).unwrap());
+    }
+
+    #[test]
     fn test_newtype_struct() {
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test(String);
@@ -651,5 +675,147 @@ foobar
 "#;
 
         assert_eq!(Test("foobar".to_string()), from_str(input).unwrap());
+    }
+
+    #[test]
+    fn test_seq() {
+        let input = r#"
+- foo
+- bar
+- foobar
+"#;
+
+        let expected = vec!["foo", "bar", "foobar"];
+
+        assert_eq!(expected, from_str::<Vec<String>>(input).unwrap());
+    }
+
+    #[test]
+    fn test_tuple() {
+        let input = r#"
+- foobar
+- false
+- 8
+"#;
+
+        let expected = ("foobar".to_string(), false, 8);
+
+        assert_eq!(expected, from_str::<(String, bool, u8)>(input).unwrap());
+    }
+
+    #[test]
+    fn test_tuple_struct() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test(String, bool, u8);
+
+        let input = r#"
+- foobar
+- false
+- 8
+"#;
+
+        let expected = Test("foobar".to_string(), false, 8);
+
+        assert_eq!(expected, from_str(input).unwrap());
+    }
+
+    #[test]
+    fn test_struct() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test {
+            a: bool,
+            b: String,
+            c: i64,
+            d: f64,
+        }
+
+        let input = r#"
+a: true
+b: |
+  foo
+  bar
+c: -56
+d: 5
+"#;
+
+        let expected = Test {
+            a: true,
+            b: "foo\nbar\n".to_string(),
+            c: -56,
+            d: 5.0,
+        };
+
+        assert_eq!(expected, from_str(input).unwrap());
+    }
+
+    #[test]
+    fn test_complex_struct() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test {
+            a: bool,
+            b: Vec<Item>,
+            c: (u8, u8, bool),
+            d: Sub,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Item {
+            foo: String,
+            bar: f64,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Sub {
+            x: bool,
+            y: String,
+            z: i64,
+        }
+
+        let input = r#"
+b:
+  - foo: some value
+    bar: 100.1234
+  - foo: other value
+    bar: 101.1234
+  - foo: final value
+    bar: 102.1234
+c:
+  - 10
+  - 12
+  - false
+d:
+  z: 6
+  x: false
+  y: |
+    foo
+    bar
+a: false
+"#;
+
+        let expected = Test {
+            a: false,
+            b: vec![
+                Item {
+                    foo: "some value".to_string(),
+                    bar: 100.1234,
+                },
+                Item {
+                    foo: "other value".to_string(),
+                    bar: 101.1234,
+                },
+                Item {
+                    foo: "final value".to_string(),
+                    bar: 102.1234,
+                },
+            ],
+            c: (10, 12, false),
+            d: Sub {
+                z: 6,
+                x: false,
+                y: "foo\nbar\n".to_string(),
+            },
+        };
+
+        assert_eq!(expected, from_str(input).unwrap());
     }
 }
