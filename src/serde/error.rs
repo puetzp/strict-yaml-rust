@@ -5,6 +5,7 @@ use std::fmt;
 pub enum Error {
     Message(String),
     MarkedMessage { msg: String, mark: Marker },
+    UnsupportedType(&'static str),
 }
 
 impl serde::de::Error for Error {
@@ -40,8 +41,11 @@ impl fmt::Display for Error {
                     "{} at line {} column {}",
                     msg,
                     mark.line(),
-                    mark.col() + 1
+                    mark.col()
                 )
+            }
+            Error::UnsupportedType(t) => {
+                write!(formatter, "{} (de)serialization is not supported", t)
             }
         }
     }

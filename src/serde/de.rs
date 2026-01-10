@@ -338,7 +338,9 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let (ev, _mark) = self.parser.next()?;
+        let (ev, mark) = self.parser.next()?;
+
+        println!("{:?} {}", ev, mark.line());
 
         match ev {
             Event::Scalar(value, _style, _anchor_id) => visitor.visit_string(value),
@@ -419,10 +421,16 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     {
         let (ev, _mark) = self.parser.next()?;
 
-        match ev {
-            Event::SequenceStart(_) => visitor.visit_seq(ArrayAccess::new(self)),
+        let value = match ev {
+            Event::SequenceStart(_) => visitor.visit_seq(ArrayAccess::new(self))?,
             _ => unreachable!(),
-        }
+        };
+
+        let (ev, _mark) = self.parser.next()?;
+
+        assert_eq!(ev, Event::SequenceEnd);
+
+        Ok(value)
     }
 
     fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, Error>
@@ -450,10 +458,16 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     {
         let (ev, _mark) = self.parser.next()?;
 
-        match ev {
-            Event::MappingStart(_) => visitor.visit_map(HashAccess::new(self)),
+        let value = match ev {
+            Event::MappingStart(_) => visitor.visit_map(HashAccess::new(self))?,
             _ => unreachable!(),
-        }
+        };
+
+        let (ev, _mark) = self.parser.next()?;
+
+        assert_eq!(ev, Event::MappingEnd);
+
+        Ok(value)
     }
 
     fn deserialize_struct<V>(
@@ -772,6 +786,10 @@ d: 5
         }
 
         let input = r#"
+c:
+  - 10
+  - 12
+  - false
 b:
   - foo: some value
     bar: 100.1234
@@ -779,17 +797,13 @@ b:
     bar: 101.1234
   - foo: final value
     bar: 102.1234
-c:
-  - 10
-  - 12
-  - false
+a: false
 d:
   z: 6
   x: false
   y: |
     foo
     bar
-a: false
 "#;
 
         let expected = Test {
