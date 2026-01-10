@@ -1,0 +1,655 @@
+use crate::{
+    parser::{Event, Parser},
+    serde::error::Error,
+};
+use serde::de::{
+    Deserialize, DeserializeSeed, Error as SerdeError, MapAccess, SeqAccess, Unexpected, Visitor,
+};
+use std::str::{Chars, FromStr};
+
+pub struct Deserializer<'de> {
+    parser: Parser<Chars<'de>>,
+}
+
+impl<'de> Deserializer<'de> {
+    pub fn from_str(input: &'de str) -> Self {
+        Deserializer {
+            parser: Parser::new(input.chars()),
+        }
+    }
+}
+
+pub fn from_str<'a, T>(s: &'a str) -> Result<T, Error>
+where
+    T: Deserialize<'a>,
+{
+    let mut deserializer = Deserializer::from_str(s);
+
+    let (ev, _mark) = deserializer.parser.next()?;
+    assert_eq!(ev, Event::StreamStart);
+
+    let (ev, _mark) = deserializer.parser.next()?;
+
+    assert_eq!(ev, Event::DocumentStart);
+
+    T::deserialize(&mut deserializer)
+}
+
+impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
+    type Error = Error;
+
+    fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        unimplemented!()
+    }
+
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let boolean = bool::from_str(&value)
+                    .map_err(|_| Error::invalid_value(Unexpected::Str(&value), &"a boolean"))
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_bool(boolean)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = i8::from_str_radix(&value, 10)
+                    .map_err(|_| {
+                        Error::invalid_value(Unexpected::Str(&value), &"an 8-bit signed integer")
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_i8(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = i16::from_str_radix(&value, 10)
+                    .map_err(|_| {
+                        Error::invalid_value(Unexpected::Str(&value), &"a 16-bit signed integer")
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_i16(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = i32::from_str_radix(&value, 10)
+                    .map_err(|_| {
+                        Error::invalid_value(Unexpected::Str(&value), &"a 32-bit signed integer")
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_i32(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = i64::from_str_radix(&value, 10)
+                    .map_err(|_| {
+                        Error::invalid_value(Unexpected::Str(&value), &"a 64-bit signed integer")
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_i64(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = i128::from_str_radix(&value, 10)
+                    .map_err(|_| {
+                        Error::invalid_value(Unexpected::Str(&value), &"an 128-bit signed integer")
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_i128(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = u8::from_str_radix(&value, 10)
+                    .map_err(|_| {
+                        Error::invalid_value(Unexpected::Str(&value), &"an 8-bit unsigned integer")
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_u8(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = u16::from_str_radix(&value, 10)
+                    .map_err(|_| {
+                        Error::invalid_value(Unexpected::Str(&value), &"a 16-bit unsigned integer")
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_u16(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = u32::from_str_radix(&value, 10)
+                    .map_err(|_| {
+                        Error::invalid_value(Unexpected::Str(&value), &"a 32-bit unsigned integer")
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_u32(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = u64::from_str_radix(&value, 10)
+                    .map_err(|_| {
+                        Error::invalid_value(Unexpected::Str(&value), &"a 64-bit unsigned integer")
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_u64(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = u128::from_str_radix(&value, 10)
+                    .map_err(|_| {
+                        Error::invalid_value(
+                            Unexpected::Str(&value),
+                            &"an 128-bit unsigned integer",
+                        )
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_u128(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = f32::from_str(&value)
+                    .map_err(|_| {
+                        Error::invalid_value(
+                            Unexpected::Str(&value),
+                            &"a 32-bit floating point number",
+                        )
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_f32(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let num = f64::from_str(&value)
+                    .map_err(|_| {
+                        Error::invalid_value(
+                            Unexpected::Str(&value),
+                            &"a 64-bit floating point number",
+                        )
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_f64(num)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                let c = char::from_str(&value)
+                    .map_err(|_| {
+                        Error::invalid_value(Unexpected::Str(&value), &"a single character")
+                    })
+                    .map_err(|err| err + mark)?;
+
+                visitor.visit_char(c)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, _mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => visitor.visit_string(value),
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        Err(Error::invalid_type(
+            Unexpected::Other("bytes"),
+            &"a supported type",
+        ))
+    }
+
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_bytes(visitor)
+    }
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_none()
+    }
+
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, _mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _style, _anchor_id) => {
+                if value.is_empty() {
+                    visitor.visit_unit()
+                } else {
+                    Err(Error::invalid_value(
+                        Unexpected::Str(&value),
+                        &"an empty string",
+                    ))
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_unit(visitor)
+    }
+
+    fn deserialize_newtype_struct<V>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_newtype_struct(self)
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, _mark) = self.parser.next()?;
+
+        match ev {
+            Event::SequenceStart(_) => visitor.visit_seq(ArrayAccess::new(self)),
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_seq(visitor)
+    }
+
+    fn deserialize_tuple_struct<V>(
+        self,
+        _name: &'static str,
+        _len: usize,
+        visitor: V,
+    ) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_seq(visitor)
+    }
+
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        let (ev, _mark) = self.parser.next()?;
+
+        match ev {
+            Event::MappingStart(_) => visitor.visit_map(HashAccess::new(self)),
+            _ => unreachable!(),
+        }
+    }
+
+    fn deserialize_struct<V>(
+        self,
+        _name: &'static str,
+        _fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_map(visitor)
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        _name: &'static str,
+        _variants: &'static [&'static str],
+        _visitor: V,
+    ) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        unimplemented!()
+    }
+
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_unit()
+    }
+}
+
+struct ArrayAccess<'a, 'de: 'a> {
+    de: &'a mut Deserializer<'de>,
+}
+
+impl<'a, 'de> ArrayAccess<'a, 'de> {
+    fn new(de: &'a mut Deserializer<'de>) -> Self {
+        Self { de }
+    }
+}
+
+impl<'de, 'a> SeqAccess<'de> for ArrayAccess<'a, 'de> {
+    type Error = Error;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        let (ev, _mark) = self.de.parser.peek()?;
+
+        match ev {
+            Event::SequenceEnd => Ok(None),
+            _ => seed.deserialize(&mut *self.de).map(Some),
+        }
+    }
+}
+
+struct HashAccess<'a, 'de: 'a> {
+    de: &'a mut Deserializer<'de>,
+}
+
+impl<'a, 'de> HashAccess<'a, 'de> {
+    fn new(de: &'a mut Deserializer<'de>) -> Self {
+        Self { de }
+    }
+}
+
+impl<'de, 'a> MapAccess<'de> for HashAccess<'a, 'de> {
+    type Error = Error;
+
+    fn next_key_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        let (ev, _mark) = self.de.parser.peek()?;
+
+        match ev {
+            Event::MappingEnd => Ok(None),
+            _ => seed.deserialize(&mut *self.de).map(Some),
+        }
+    }
+
+    fn next_value_seed<T>(&mut self, seed: T) -> Result<T::Value, Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        seed.deserialize(&mut *self.de)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::from_str;
+    use serde::Deserialize;
+
+    #[test]
+    fn test_primitives() {
+        let input = r#"
+true
+"#;
+
+        assert_eq!(true, from_str(input).unwrap());
+
+        let input = r#"
+"false"
+"#;
+
+        assert_eq!(false, from_str(input).unwrap());
+
+        let input = r#"
+foobar
+"#;
+
+        assert_eq!("foobar".to_string(), from_str::<String>(input).unwrap());
+
+        let input = r#"
+'foobar'
+"#;
+
+        assert_eq!("foobar".to_string(), from_str::<String>(input).unwrap());
+
+        let input = r#"
+78
+"#;
+
+        assert_eq!(78, from_str(input).unwrap());
+
+        let input = r#"
+-78
+"#;
+
+        assert_eq!(-78, from_str(input).unwrap());
+
+        let input = r#"
+'-78'
+"#;
+
+        assert_eq!(-78, from_str(input).unwrap());
+
+        let input = r#"
+"-78"
+"#;
+
+        assert_eq!(-78, from_str(input).unwrap());
+
+        let input = r#"
+7.8
+"#;
+
+        assert_eq!(7.8, from_str(input).unwrap());
+
+        let input = r#"
+-7.8
+"#;
+
+        assert_eq!(-7.8, from_str(input).unwrap());
+
+        let input = r#"
+"%"
+"#;
+
+        assert_eq!('%', from_str(input).unwrap());
+    }
+
+    #[test]
+    fn test_option() {
+        let input = r#"
+foobar
+"#;
+
+        assert_eq!(
+            Some("foobar".to_string()),
+            from_str::<Option<String>>(input).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_newtype_struct() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test(String);
+
+        let input = r#"
+foobar
+"#;
+
+        assert_eq!(Test("foobar".to_string()), from_str(input).unwrap());
+    }
+}

@@ -30,6 +30,8 @@
 pub mod emitter;
 pub mod parser;
 pub mod scanner;
+#[cfg(feature = "serde")]
+pub mod serde;
 pub mod strict_yaml;
 
 // reexport key APIs
