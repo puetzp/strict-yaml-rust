@@ -359,10 +359,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        Err(Error::invalid_type(
-            Unexpected::Other("bytes"),
-            &"a supported type",
-        ))
+        Err(Error::UnsupportedType("bytes"))
     }
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Error>
