@@ -34,7 +34,18 @@ where
         deserializer.parser.next()?;
     }
 
-    T::deserialize(&mut deserializer)
+    let res = T::deserialize(&mut deserializer);
+
+    let (ev, _mark) = deserializer.parser.peek()?;
+
+    if *ev == Event::DocumentEnd {
+        deserializer.parser.next()?;
+    }
+
+    let (ev, _mark) = deserializer.parser.next()?;
+    assert_eq!(ev, Event::StreamEnd);
+
+    res
 }
 
 impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
@@ -391,6 +402,12 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
+        let (ev, _mark) = self.parser.peek()?;
+
+        if matches!(ev, Event::Scalar(value, _style, _anchor_id) if value.is_empty()) {
+            let _ = self.parser.next()?;
+        }
+
         visitor.visit_unit()
     }
 
