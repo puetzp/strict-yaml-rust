@@ -89,7 +89,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     .map_err(|_| Error::invalid_value(Unexpected::Str(&value), &"a boolean"))
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_bool(boolean)
+                visitor.visit_bool(boolean).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -109,7 +109,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_i8(num)
+                visitor.visit_i8(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -129,7 +129,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_i16(num)
+                visitor.visit_i16(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -149,7 +149,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_i32(num)
+                visitor.visit_i32(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -169,7 +169,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_i64(num)
+                visitor.visit_i64(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -189,7 +189,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_i128(num)
+                visitor.visit_i128(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -209,7 +209,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_u8(num)
+                visitor.visit_u8(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -229,7 +229,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_u16(num)
+                visitor.visit_u16(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -249,7 +249,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_u32(num)
+                visitor.visit_u32(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -269,7 +269,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_u64(num)
+                visitor.visit_u64(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -292,7 +292,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_u128(num)
+                visitor.visit_u128(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -315,7 +315,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_f32(num)
+                visitor.visit_f32(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -338,7 +338,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_f64(num)
+                visitor.visit_f64(num).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -358,7 +358,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
                     })
                     .map_err(|err| err + mark)?;
 
-                visitor.visit_char(c)
+                visitor.visit_char(c).map_err(|err: Error| err + mark)
             }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
@@ -371,7 +371,9 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
         let (ev, mark) = self.parser.next()?;
 
         match ev {
-            Event::Scalar(value, _style, _anchor_id) => visitor.visit_string(value),
+            Event::Scalar(value, _style, _anchor_id) => {
+                visitor.visit_string(value).map_err(|err: Error| err + mark)
+            }
             _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
@@ -453,8 +455,12 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
         let (ev, mark) = self.parser.next()?;
 
         let value = match ev {
-            Event::SequenceStart(_) => visitor.visit_seq(ArrayAccess::new(self))?,
-            Event::StreamStart if self.many => visitor.visit_seq(ArrayAccess::new(self))?,
+            Event::SequenceStart(_) => visitor
+                .visit_seq(ArrayAccess::new(self))
+                .map_err(|err: Error| err + mark)?,
+            Event::StreamStart if self.many => visitor
+                .visit_seq(ArrayAccess::new(self))
+                .map_err(|err: Error| err + mark)?,
             _ => {
                 if self.many {
                     return Err(Error::from_event(ev, mark, "the start of the stream"));
@@ -507,7 +513,9 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
         let (ev, mark) = self.parser.next()?;
 
         let value = match ev {
-            Event::MappingStart(_) => visitor.visit_map(HashAccess::new(self))?,
+            Event::MappingStart(_) => visitor
+                .visit_map(HashAccess::new(self))
+                .map_err(|err: Error| err + mark)?,
             _ => return Err(Error::from_event(ev, mark, "the start of a mapping")),
         };
 
