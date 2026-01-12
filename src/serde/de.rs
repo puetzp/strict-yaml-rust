@@ -91,7 +91,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_bool(boolean)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -111,7 +111,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_i8(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -131,7 +131,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_i16(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -151,7 +151,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_i32(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -171,7 +171,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_i64(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -191,7 +191,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_i128(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -211,7 +211,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_u8(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -231,7 +231,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_u16(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -251,7 +251,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_u32(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -271,7 +271,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_u64(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -294,7 +294,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_u128(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -317,7 +317,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_f32(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -340,7 +340,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_f64(num)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -360,7 +360,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
                 visitor.visit_char(c)
             }
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -370,11 +370,9 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     {
         let (ev, mark) = self.parser.next()?;
 
-        println!("{:?} {}", ev, mark.line());
-
         match ev {
             Event::Scalar(value, _style, _anchor_id) => visitor.visit_string(value),
-            _ => unreachable!(),
+            _ => Err(Error::from_event(ev, mark, "a scalar")),
         }
     }
 
@@ -452,22 +450,32 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let (ev, _mark) = self.parser.next()?;
+        let (ev, mark) = self.parser.next()?;
 
         let value = match ev {
             Event::SequenceStart(_) => visitor.visit_seq(ArrayAccess::new(self))?,
             Event::StreamStart if self.many => visitor.visit_seq(ArrayAccess::new(self))?,
-            _ => unreachable!(),
+            _ => {
+                if self.many {
+                    return Err(Error::from_event(ev, mark, "the start of the stream"));
+                } else {
+                    return Err(Error::from_event(ev, mark, "the start of a sequence"));
+                }
+            }
         };
 
         if self.many {
-            let (ev, _mark) = self.parser.next()?;
+            let (ev, mark) = self.parser.next()?;
 
-            assert_eq!(ev, Event::StreamEnd);
+            if ev != Event::StreamEnd {
+                return Err(Error::from_event(ev, mark, "the end of the stream"));
+            }
         } else {
-            let (ev, _mark) = self.parser.next()?;
+            let (ev, mark) = self.parser.next()?;
 
-            assert_eq!(ev, Event::SequenceEnd);
+            if ev != Event::SequenceEnd {
+                return Err(Error::from_event(ev, mark, "the end of a sequence"));
+            }
         }
 
         Ok(value)
@@ -496,18 +504,20 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let (ev, _mark) = self.parser.next()?;
+        let (ev, mark) = self.parser.next()?;
 
         let value = match ev {
             Event::MappingStart(_) => visitor.visit_map(HashAccess::new(self))?,
-            _ => unreachable!(),
+            _ => return Err(Error::from_event(ev, mark, "the start of a mapping")),
         };
 
         let (ev, _mark) = self.parser.next()?;
 
-        assert_eq!(ev, Event::MappingEnd);
-
-        Ok(value)
+        if ev != Event::MappingEnd {
+            Err(Error::from_event(ev, mark, "the end of a mapping"))
+        } else {
+            Ok(value)
+        }
     }
 
     fn deserialize_struct<V>(
@@ -913,6 +923,7 @@ end
         assert_eq!(expected, from_str_many::<Vec<String>>(input).unwrap());
 
         #[derive(Debug, Deserialize, PartialEq)]
+        #[serde(deny_unknown_fields)]
         struct Test {
             a: String,
             b: usize,

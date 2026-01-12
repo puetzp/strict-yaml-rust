@@ -1,11 +1,75 @@
-use crate::scanner::{Marker, ScanError};
+use crate::{
+    parser::Event,
+    scanner::{Marker, ScanError},
+};
 use std::fmt;
 
 #[derive(Debug)]
 pub enum Error {
     Message(String),
-    MarkedMessage { msg: String, mark: Marker },
+    MarkedMessage {
+        msg: String,
+        mark: Marker,
+    },
     UnsupportedType(&'static str),
+    UnexpectedStreamStart {
+        mark: Marker,
+        expected: &'static str,
+    },
+    UnexpectedStreamEnd {
+        mark: Marker,
+        expected: &'static str,
+    },
+    UnexpectedDocumentStart {
+        mark: Marker,
+        expected: &'static str,
+    },
+    UnexpectedDocumentEnd {
+        mark: Marker,
+        expected: &'static str,
+    },
+    UnexpectedScalar {
+        mark: Marker,
+        expected: &'static str,
+        value: String,
+    },
+    UnexpectedSequenceStart {
+        mark: Marker,
+        expected: &'static str,
+    },
+    UnexpectedSequenceEnd {
+        mark: Marker,
+        expected: &'static str,
+    },
+    UnexpectedMappingStart {
+        mark: Marker,
+        expected: &'static str,
+    },
+    UnexpectedMappingEnd {
+        mark: Marker,
+        expected: &'static str,
+    },
+}
+
+impl Error {
+    pub(crate) fn from_event(ev: Event, mark: Marker, expected: &'static str) -> Self {
+        match ev {
+            Event::StreamStart => Self::UnexpectedStreamStart { mark, expected },
+            Event::StreamEnd => Self::UnexpectedStreamEnd { mark, expected },
+            Event::DocumentStart => Self::UnexpectedDocumentStart { mark, expected },
+            Event::DocumentEnd => Self::UnexpectedDocumentEnd { mark, expected },
+            Event::Scalar(value, _, _) => Self::UnexpectedScalar {
+                mark,
+                expected,
+                value,
+            },
+            Event::SequenceStart(_) => Self::UnexpectedSequenceStart { mark, expected },
+            Event::SequenceEnd => Self::UnexpectedSequenceEnd { mark, expected },
+            Event::MappingStart(_) => Self::UnexpectedMappingStart { mark, expected },
+            Event::MappingEnd => Self::UnexpectedMappingEnd { mark, expected },
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl serde::de::Error for Error {
@@ -36,16 +100,87 @@ impl fmt::Display for Error {
         match self {
             Error::Message(msg) => formatter.write_str(msg),
             Error::MarkedMessage { msg, mark } => {
-                write!(
-                    formatter,
-                    "{} at line {} column {}",
-                    msg,
-                    mark.line(),
-                    mark.col()
-                )
+                write!(formatter, "{} at line {}", msg, mark.line())
             }
             Error::UnsupportedType(t) => {
-                write!(formatter, "{} (de)serialization is not supported", t)
+                write!(formatter, "(de)serialization of {} is not supported", t)
+            }
+            Error::UnexpectedStreamStart { mark, expected } => {
+                write!(
+                    formatter,
+                    "expected {}, but found the start of the stream at line {}",
+                    expected,
+                    mark.line()
+                )
+            }
+            Error::UnexpectedStreamEnd { mark, expected } => {
+                write!(
+                    formatter,
+                    "expected {}, but found the end of the stream at line {}",
+                    expected,
+                    mark.line()
+                )
+            }
+            Error::UnexpectedDocumentStart { mark, expected } => {
+                write!(
+                    formatter,
+                    "expected {}, but found the start of a document at line {}",
+                    expected,
+                    mark.line()
+                )
+            }
+            Error::UnexpectedDocumentEnd { mark, expected } => {
+                write!(
+                    formatter,
+                    "expected {}, but found the end of a document at line {}",
+                    expected,
+                    mark.line()
+                )
+            }
+            Error::UnexpectedScalar {
+                mark,
+                expected,
+                value,
+            } => {
+                write!(
+                    formatter,
+                    "expected {}, but found scalar \"{}\" at line {}",
+                    expected,
+                    value,
+                    mark.line()
+                )
+            }
+            Error::UnexpectedSequenceStart { mark, expected } => {
+                write!(
+                    formatter,
+                    "expected {}, but found the start of a sequence at line {}",
+                    expected,
+                    mark.line()
+                )
+            }
+            Error::UnexpectedSequenceEnd { mark, expected } => {
+                write!(
+                    formatter,
+                    "expected {}, but found the end of a sequence at line {}",
+                    expected,
+                    mark.line()
+                )
+            }
+            Error::UnexpectedMappingStart { mark, expected } => {
+                write!(
+                    formatter,
+                    "expected {}, but found the start of a mapping at line {}",
+                    expected,
+                    mark.line()
+                )
+            }
+            Error::UnexpectedMappingEnd { mark, expected } => {
+                write!(
+                    formatter,
+                    "expected {}, but found the end of a mapping at line {}",
+                    expected,
+                    mark.line()
+                )
             }
         }
     }
