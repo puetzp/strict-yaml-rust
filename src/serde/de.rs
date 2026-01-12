@@ -9,14 +9,33 @@ use std::str::{Chars, FromStr};
 
 pub struct Deserializer<'de> {
     parser: Parser<Chars<'de>>,
+    many: bool,
 }
 
 impl<'de> Deserializer<'de> {
-    pub fn from_str(input: &'de str) -> Self {
+    fn new(input: &'de str, many: bool) -> Self {
         Deserializer {
             parser: Parser::new(input.chars()),
+            many,
         }
     }
+
+    pub fn from_str_many(input: &'de str) -> Self {
+        Deserializer::new(input, true)
+    }
+
+    pub fn from_str(input: &'de str) -> Self {
+        Deserializer::new(input, false)
+    }
+}
+
+pub fn from_str_many<'a, T>(s: &'a str) -> Result<T, Error>
+where
+    T: Deserialize<'a>,
+{
+    let mut deserializer = Deserializer::from_str_many(s);
+
+    T::deserialize(&mut deserializer)
 }
 
 pub fn from_str<'a, T>(s: &'a str) -> Result<T, Error>
@@ -437,12 +456,19 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
         let value = match ev {
             Event::SequenceStart(_) => visitor.visit_seq(ArrayAccess::new(self))?,
+            Event::StreamStart if self.many => visitor.visit_seq(ArrayAccess::new(self))?,
             _ => unreachable!(),
         };
 
-        let (ev, _mark) = self.parser.next()?;
+        if self.many {
+            let (ev, _mark) = self.parser.next()?;
 
-        assert_eq!(ev, Event::SequenceEnd);
+            assert_eq!(ev, Event::StreamEnd);
+        } else {
+            let (ev, _mark) = self.parser.next()?;
+
+            assert_eq!(ev, Event::SequenceEnd);
+        }
 
         Ok(value)
     }
@@ -542,9 +568,29 @@ impl<'de, 'a> SeqAccess<'de> for ArrayAccess<'a, 'de> {
     {
         let (ev, _mark) = self.de.parser.peek()?;
 
-        match ev {
-            Event::SequenceEnd => Ok(None),
-            _ => seed.deserialize(&mut *self.de).map(Some),
+        if self.de.many {
+            match ev {
+                Event::StreamEnd => Ok(None),
+                Event::DocumentStart => {
+                    let _ = self.de.parser.next()?;
+
+                    let v = seed.deserialize(&mut *self.de).map(Some);
+
+                    let (ev, _mark) = self.de.parser.peek()?;
+
+                    if *ev == Event::DocumentEnd {
+                        let _ = self.de.parser.next()?;
+                    }
+
+                    v
+                }
+                _ => unreachable!(),
+            }
+        } else {
+            match ev {
+                Event::SequenceEnd => Ok(None),
+                _ => seed.deserialize(&mut *self.de).map(Some),
+            }
         }
     }
 }
@@ -584,7 +630,7 @@ impl<'de, 'a> MapAccess<'de> for HashAccess<'a, 'de> {
 
 #[cfg(test)]
 mod test {
-    use super::from_str;
+    use super::{from_str, from_str_many};
     use serde::Deserialize;
 
     #[test]
@@ -845,5 +891,69 @@ d:
         };
 
         assert_eq!(expected, from_str(input).unwrap());
+    }
+
+    #[test]
+    fn test_multiple_documents() {
+        let input = r#"
+---
+foobar
+---
+barfoo
+---
+end
+"#;
+
+        let expected = vec![
+            "foobar".to_string(),
+            "barfoo".to_string(),
+            "end".to_string(),
+        ];
+
+        assert_eq!(expected, from_str_many::<Vec<String>>(input).unwrap());
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test {
+            a: String,
+            b: usize,
+            c: bool,
+        }
+
+        let input = r#"
+---
+a: foo
+b: 50
+c: true
+---
+b: 10
+a: bar
+c: false
+...
+---
+c: false
+b: 20
+a: end
+...
+"#;
+
+        let expected = vec![
+            Test {
+                a: "foo".to_string(),
+                b: 50,
+                c: true,
+            },
+            Test {
+                a: "bar".to_string(),
+                b: 10,
+                c: false,
+            },
+            Test {
+                a: "end".to_string(),
+                b: 20,
+                c: false,
+            },
+        ];
+
+        assert_eq!(expected, from_str_many::<Vec<Test>>(input).unwrap());
     }
 }
