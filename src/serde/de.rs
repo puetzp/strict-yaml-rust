@@ -3,7 +3,8 @@ use crate::{
     serde::error::Error,
 };
 use serde::de::{
-    Deserialize, DeserializeSeed, Error as SerdeError, MapAccess, SeqAccess, Unexpected, Visitor,
+    Deserialize, DeserializeSeed, EnumAccess, Error as SerdeError, IntoDeserializer, MapAccess,
+    SeqAccess, Unexpected, VariantAccess, Visitor,
 };
 use std::str::{Chars, FromStr};
 
@@ -57,6 +58,7 @@ where
 
     let (ev, _mark) = deserializer.parser.peek()?;
 
+    println!("{:?}", ev);
     if *ev == Event::DocumentEnd {
         deserializer.parser.next()?;
     }
@@ -544,12 +546,31 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
         self,
         _name: &'static str,
         _variants: &'static [&'static str],
-        _visitor: V,
+        visitor: V,
     ) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        let (ev, mark) = self.parser.next()?;
+
+        match ev {
+            Event::Scalar(value, _, _) => visitor
+                .visit_enum(value.into_deserializer())
+                .map_err(|err: Error| err + mark),
+            _ => {
+                let v = visitor
+                    .visit_enum(Enum::new(self))
+                    .map_err(|err: Error| err + mark)?;
+
+                let (ev, mark) = self.parser.next()?;
+
+                if ev != Event::MappingEnd {
+                    Err(Error::from_event(ev, mark, "the end of a mapping"))
+                } else {
+                    Ok(v)
+                }
+            }
+        }
     }
 
     fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Error>
@@ -643,6 +664,62 @@ impl<'de, 'a> MapAccess<'de> for HashAccess<'a, 'de> {
         T: DeserializeSeed<'de>,
     {
         seed.deserialize(&mut *self.de)
+    }
+}
+
+struct Enum<'a, 'de: 'a> {
+    de: &'a mut Deserializer<'de>,
+}
+
+impl<'a, 'de> Enum<'a, 'de> {
+    fn new(de: &'a mut Deserializer<'de>) -> Self {
+        Self { de }
+    }
+}
+
+impl<'de, 'a> EnumAccess<'de> for Enum<'a, 'de> {
+    type Error = Error;
+    type Variant = Self;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        let v = seed.deserialize(&mut *self.de)?;
+        Ok((v, self))
+    }
+}
+
+impl<'de, 'a> VariantAccess<'de> for Enum<'a, 'de> {
+    type Error = Error;
+
+    fn unit_variant(self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        seed.deserialize(self.de)
+    }
+
+    fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        serde::de::Deserializer::deserialize_seq(self.de, visitor)
+    }
+
+    fn struct_variant<V>(
+        self,
+        _fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        serde::de::Deserializer::deserialize_map(self.de, visitor)
     }
 }
 
@@ -909,6 +986,47 @@ d:
         };
 
         assert_eq!(expected, from_str(input).unwrap());
+    }
+
+    #[test]
+    fn test_enum_unit_variant() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        enum Test {
+            First,
+            Second,
+        }
+
+        let input = r#"
+First
+"#;
+
+        assert_eq!(Test::First, from_str(input).unwrap());
+
+        let input = r#"
+---
+First
+---
+Second
+"#;
+
+        let expected = vec![Test::First, Test::Second];
+
+        assert_eq!(expected, from_str_many::<Vec<Test>>(input).unwrap());
+    }
+
+    #[test]
+    fn test_enum_newtype_variant() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        enum Test {
+            First(String),
+            Second(bool),
+        }
+
+        let input = r#"
+First: foobar
+"#;
+
+        assert_eq!(Test::First("foobar".to_string()), from_str(input).unwrap());
     }
 
     #[test]
