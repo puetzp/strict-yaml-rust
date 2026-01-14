@@ -58,7 +58,6 @@ where
 
     let (ev, _mark) = deserializer.parser.peek()?;
 
-    println!("{:?}", ev);
     if *ev == Event::DocumentEnd {
         deserializer.parser.next()?;
     }
