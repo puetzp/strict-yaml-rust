@@ -11,6 +11,7 @@ use std::str::{Chars, FromStr};
 pub struct Deserializer<'de> {
     parser: Parser<Chars<'de>>,
     many: bool,
+    is_root: Option<bool>,
 }
 
 impl<'de> Deserializer<'de> {
@@ -18,6 +19,7 @@ impl<'de> Deserializer<'de> {
         Deserializer {
             parser: Parser::new(input.chars()),
             many,
+            is_root: None,
         }
     }
 
@@ -453,17 +455,24 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
+        let mut is_root = false;
+
+        if self.many && self.is_root.is_none() {
+            self.is_root = Some(true);
+            is_root = true;
+        }
+
         let (ev, mark) = self.parser.next()?;
 
         let value = match ev {
             Event::SequenceStart(_) => visitor
-                .visit_seq(ArrayAccess::new(self))
+                .visit_seq(ArrayAccess::new(self, is_root))
                 .map_err(|err: Error| err + mark)?,
             Event::StreamStart if self.many => visitor
-                .visit_seq(ArrayAccess::new(self))
+                .visit_seq(ArrayAccess::new(self, is_root))
                 .map_err(|err: Error| err + mark)?,
             _ => {
-                if self.many {
+                if self.many && is_root {
                     return Err(Error::from_event(ev, mark, "the start of the stream"));
                 } else {
                     return Err(Error::from_event(ev, mark, "the start of a sequence"));
@@ -471,10 +480,11 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
             }
         };
 
-        if self.many {
+        if self.many && is_root {
             let (ev, mark) = self.parser.next()?;
 
             if ev != Event::StreamEnd {
+                self.is_root = Some(false);
                 return Err(Error::from_event(ev, mark, "the end of the stream"));
             }
         } else {
@@ -589,11 +599,12 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
 struct ArrayAccess<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
+    is_root: bool,
 }
 
 impl<'a, 'de> ArrayAccess<'a, 'de> {
-    fn new(de: &'a mut Deserializer<'de>) -> Self {
-        Self { de }
+    fn new(de: &'a mut Deserializer<'de>, is_root: bool) -> Self {
+        Self { de, is_root }
     }
 }
 
@@ -606,7 +617,7 @@ impl<'de, 'a> SeqAccess<'de> for ArrayAccess<'a, 'de> {
     {
         let (ev, _mark) = self.de.parser.peek()?;
 
-        if self.de.many {
+        if self.de.many && self.is_root {
             match ev {
                 Event::StreamEnd => Ok(None),
                 Event::DocumentStart => {
@@ -1026,6 +1037,29 @@ First: foobar
 "#;
 
         assert_eq!(Test::First("foobar".to_string()), from_str(input).unwrap());
+    }
+
+    #[test]
+    fn test_enum_tuple_variant() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        enum Test {
+            Foo(u8, bool, String),
+            Bar,
+        }
+
+        let input = r#"
+---
+Foo:
+  - 10
+  - true
+  - bar
+---
+Bar
+"#;
+
+        let expected = vec![Test::Foo(10, true, "bar".to_string()), Test::Bar];
+
+        assert_eq!(expected, from_str_many::<Vec<Test>>(input).unwrap());
     }
 
     #[test]
