@@ -4,47 +4,69 @@ use crate::{
 };
 use std::fmt;
 
+/// An error type that contains all possible error variants that may occur
+/// when serializing or deserializing StrictYaml data.
 #[derive(Debug)]
 pub enum Error {
+    /// Wraps errors that originate from serde.
     Message(String),
-    MarkedMessage {
-        msg: String,
-        mark: Marker,
-    },
+    /// Enhances errors from serde with a marker to the location where
+    /// the error occured.
+    MarkedMessage { msg: String, mark: Marker },
+    /// Raised when the deserializer calls an unsupported `deserialize_*`
+    /// method based on the input data.
     UnsupportedType(&'static str),
+    /// Raised when the deserializer expected the start of a YAML stream,
+    /// but encounters something different.
     UnexpectedStreamStart {
         mark: Marker,
         expected: &'static str,
     },
+    /// Raised when the deserializer expected the end of a YAML stream,
+    /// but encounters something different.
     UnexpectedStreamEnd {
         mark: Marker,
         expected: &'static str,
     },
+    /// Raised when the deserializer expected the start of a YAML document,
+    /// but encounters something different.
     UnexpectedDocumentStart {
         mark: Marker,
         expected: &'static str,
     },
+    /// Raised when the deserializer expected the end of a YAML document,
+    /// but encounters something different.
     UnexpectedDocumentEnd {
         mark: Marker,
         expected: &'static str,
     },
+    /// Raised when the deserializer expected a scalar value, but encounters
+    /// something different.
     UnexpectedScalar {
         mark: Marker,
         expected: &'static str,
         value: String,
     },
+    /// Raised when the deserializer expected the start of a YAML sequence,
+    /// but encounters something different.
     UnexpectedSequenceStart {
         mark: Marker,
         expected: &'static str,
     },
+    /// Raised when the deserializer expected the end of a YAML sequence,
+    /// but encounters something different.
     UnexpectedSequenceEnd {
         mark: Marker,
         expected: &'static str,
     },
+    /// Raised when the deserializer expected the start of a YAML map,
+    /// but encounters something different.
     UnexpectedMappingStart {
         mark: Marker,
         expected: &'static str,
     },
+    /// Raised when the deserializer expected the end of a YAML map,
+    /// but encounters something different.
     UnexpectedMappingEnd {
         mark: Marker,
         expected: &'static str,
@@ -52,6 +74,9 @@ pub enum Error {
 }
 
 impl Error {
+    /// Construct the appropiate error variant based on the event
+    /// emitted by the parser, wich did not match the event expected
+    /// by the deserializer.
     pub(crate) fn from_event(ev: Event, mark: Marker, expected: &'static str) -> Self {
         match ev {
             Event::StreamStart => Self::UnexpectedStreamStart { mark, expected },
@@ -87,6 +112,8 @@ impl From<ScanError> for Error {
 impl std::ops::Add<Marker> for Error {
     type Output = Self;
 
+    /// The `add` operator is overloaded to enhance a serde error
+    /// with a location provided by the parser.
     fn add(self, mark: Marker) -> Self {
         match self {
             Self::Message(msg) => Self::MarkedMessage { msg, mark },
