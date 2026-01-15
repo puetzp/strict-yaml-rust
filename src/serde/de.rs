@@ -1063,6 +1063,37 @@ Bar
     }
 
     #[test]
+    fn test_enum_struct_variant() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        #[serde(rename_all = "lowercase")]
+        enum Test {
+            Foo { a: u8, b: bool, c: String },
+            Bar,
+        }
+
+        let input = r#"
+---
+foo:
+  b: true
+  c: bar
+  a: 10
+---
+bar
+"#;
+
+        let expected = vec![
+            Test::Foo {
+                a: 10,
+                b: true,
+                c: "bar".to_string(),
+            },
+            Test::Bar,
+        ];
+
+        assert_eq!(expected, from_str_many::<Vec<Test>>(input).unwrap());
+    }
+
+    #[test]
     fn test_multiple_documents() {
         let input = r#"
 ---
