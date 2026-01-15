@@ -47,8 +47,11 @@ where
 {
     let mut deserializer = Deserializer::from_str(s);
 
-    let (ev, _mark) = deserializer.parser.next()?;
-    assert_eq!(ev, Event::StreamStart);
+    let (ev, mark) = deserializer.parser.next()?;
+
+    if ev != Event::StreamStart {
+        return Err(Error::from_event(ev, mark, "the start of the stream"));
+    }
 
     let (ev, _mark) = deserializer.parser.peek()?;
 
@@ -64,8 +67,11 @@ where
         deserializer.parser.next()?;
     }
 
-    let (ev, _mark) = deserializer.parser.next()?;
-    assert_eq!(ev, Event::StreamEnd);
+    let (ev, mark) = deserializer.parser.next()?;
+
+    if ev != Event::StreamEnd {
+        return Err(Error::from_event(ev, mark, "the end of the stream"));
+    }
 
     res
 }
