@@ -32,6 +32,87 @@ impl<'de> Deserializer<'de> {
     }
 }
 
+/// Deserialize multiple YAML documents from the same stream into an
+/// instance of a container `T`.
+///
+/// The function serves as a hint to the deserializer to expect a
+/// multi-document YAML stream and process it accordingly. The hint from
+/// the user is necessary because YAML is not self-describing to the extent
+/// that JSON. The deserializer needs way to tell the difference between the
+/// following cases when it calls [`serde::Deserializer::deserialize_seq`]:
+///
+/// ```yaml
+/// ---
+/// some: example
+/// data: 100
+/// ---
+/// some: example
+/// data: 200
+/// ---
+/// some: example
+/// data: 300
+/// ```
+///
+/// ```yaml
+/// ---
+/// - some: example
+///   data: 100
+/// - some: example
+///   data: 200
+/// - some: example
+///   data: 300
+/// ```
+///
+/// [`from_str_many`] handles the former case while the latter is the "default
+/// mode" when calling [`from_str`].
+///
+/// # Examples
+///
+/// As described above the [`from_str_many`] function deserializes a YAML stream containing
+/// multiple documents to a container data structure that implements
+/// [`serde::Deserialize`] (e.g. [`Vec`]).
+///
+///
+/// ```rust
+/// use strict_yaml_rust::serde::from_str_many;
+/// use serde::Deserialize;
+///
+/// #[derive(Deserialize)]
+/// struct Deployment {
+///   kind: String,
+///   spec: Spec
+/// }
+///
+/// #[derive(Deserialize)]
+/// struct Spec {
+///   replicas: u16,
+///   name: String
+/// }
+///
+/// let yaml = r#"
+/// ---
+/// kind: deployment
+/// spec:
+///   replicas: 5
+///   name: "nginx"
+/// ---
+/// kind: container
+/// spec:
+///   replicas: 1
+///   name: "redis"
+/// ---
+/// kind: deployment
+/// spec:
+///   replicas: 3
+///   name: "webapp"
+/// ...
+/// "#;
+///
+/// let deployments: Vec<Deployment> = from_str_many(yaml).unwrap();
+///
+/// assert!(deployments.len() == 3);
+/// assert!(deployments.first().is_some_and(|d| d.spec.name == "nginx".to_string()));
+/// ```
 pub fn from_str_many<'a, T>(s: &'a str) -> Result<T, Error>
 where
     T: Deserialize<'a>,
@@ -41,6 +122,43 @@ where
     T::deserialize(&mut deserializer)
 }
 
+/// Deserialize a YAML document into an instance of type `T`.
+///
+/// # Examples
+///
+/// The [`from_str`] function deserializes a YAML document to a data structure
+/// that implements [`serde::Deserialize`].
+///
+///
+/// ```rust
+/// use strict_yaml_rust::serde::from_str;
+/// use serde::Deserialize;
+///
+/// #[derive(Deserialize)]
+/// struct Deployment {
+///   kind: String,
+///   spec: Spec
+/// }
+///
+/// #[derive(Deserialize)]
+/// struct Spec {
+///   replicas: u16,
+///   name: String
+/// }
+///
+/// let yaml = r#"
+/// ---
+/// kind: deployment
+/// spec:
+///   replicas: 5
+///   name: "nginx"
+/// ...
+/// "#;
+///
+/// let deployment: Deployment = from_str(yaml).unwrap();
+///
+/// assert_eq!(deployment.spec.name, "nginx".to_string());
+/// ```
 pub fn from_str<'a, T>(s: &'a str) -> Result<T, Error>
 where
     T: Deserialize<'a>,
