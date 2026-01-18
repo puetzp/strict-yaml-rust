@@ -251,7 +251,17 @@ impl<'de> serde::de::Deserializer<'de> for StrictYaml {
                 Err(Self::Error::invalid_type(Unexpected::Str(&value), &"a map"))
             }
             Self::Array(_) => Err(Self::Error::invalid_type(Unexpected::Seq, &"a map")),
-            Self::Hash(value) => visitor.visit_map(HashAccess::new(value)),
+            Self::Hash(value) => {
+                let len = value.len();
+                let mut deserializer = HashAccess::new(value);
+                let seq = visitor.visit_map(&mut deserializer)?;
+
+                if deserializer.iter.len() != 0 {
+                    Err(Self::Error::invalid_length(len, &"fewer elements in map"))
+                } else {
+                    Ok(seq)
+                }
+            }
             _ => unreachable!(),
         }
     }
@@ -668,5 +678,49 @@ mod test {
             Test("foobar".to_string(), true, 20),
             from_strict_yaml::<Test>(input).unwrap()
         );
+    }
+
+    #[test]
+    fn test_struct() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test {
+            a: bool,
+            b: String,
+            c: i64,
+            d: f64,
+        }
+
+        let mut hash = Hash::new();
+
+        hash.insert(
+            StrictYaml::String("a".into()),
+            StrictYaml::String("true".into()),
+        );
+
+        hash.insert(
+            StrictYaml::String("c".into()),
+            StrictYaml::String("10".into()),
+        );
+
+        hash.insert(
+            StrictYaml::String("d".into()),
+            StrictYaml::String("10.0".into()),
+        );
+
+        hash.insert(
+            StrictYaml::String("b".into()),
+            StrictYaml::String("foobar".into()),
+        );
+
+        let input = StrictYaml::Hash(hash);
+
+        let expected = Test {
+            a: true,
+            b: "foobar".to_string(),
+            c: 10,
+            d: 10.0,
+        };
+
+        assert_eq!(expected, from_strict_yaml::<Test>(input).unwrap());
     }
 }
