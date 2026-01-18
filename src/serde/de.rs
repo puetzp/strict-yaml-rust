@@ -1,12 +1,35 @@
 use crate::{
     parser::{Event, Parser},
     serde::error::Error,
+    strict_yaml::StrictYaml,
 };
 use serde::de::{
     Deserialize, DeserializeSeed, EnumAccess, Error as SerdeError, IntoDeserializer, MapAccess,
     SeqAccess, Unexpected, VariantAccess, Visitor,
 };
 use std::str::{Chars, FromStr};
+
+/// Deserialize an instance of type T from [`StrictYaml`](enum@crate::StrictYaml).
+///
+/// ```
+/// use strict_yaml_rust::{StrictYaml, serde::from_strict_yaml};
+///
+/// let yaml = StrictYaml::Array(
+///     vec![
+///         StrictYaml::String("1".into()),
+///         StrictYaml::String("2".into()),
+///         StrictYaml::String("3".into())
+///     ]
+/// );
+///
+/// assert_eq!(vec![1, 2, 3], from_strict_yaml::<Vec<u16>>(yaml).unwrap());
+/// ```
+pub fn from_strict_yaml<'a, T>(yaml: StrictYaml) -> Result<T, Error>
+where
+    T: Deserialize<'a>,
+{
+    T::deserialize(yaml)
+}
 
 pub struct Deserializer<'de> {
     parser: Parser<Chars<'de>>,

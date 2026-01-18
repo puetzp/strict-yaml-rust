@@ -24,7 +24,30 @@
 //! let mut out_str = String::new();
 //! let mut emitter = StrictYamlEmitter::new(&mut out_str);
 //! emitter.dump(doc).unwrap(); // dump the YAML object to a String
+//! ```
 //!
+//! ```
+//! use strict_yaml_rust::StrictYaml;
+//! use strict_yaml_rust::serde::from_str;;
+//!
+//! let input = r#"
+//! ---
+//! - 1
+//! - 2
+//! - 3
+//! "#;
+//!
+//! let yaml: StrictYaml = from_str(input).unwrap();
+//!
+//! let expect = StrictYaml::Array(
+//!     vec![
+//!         StrictYaml::String("1".into()),
+//!         StrictYaml::String("2".into()),
+//!         StrictYaml::String("3".into())
+//!     ]
+//! );
+//!
+//! assert_eq!(yaml, expect);
 //! ```
 
 pub mod emitter;
