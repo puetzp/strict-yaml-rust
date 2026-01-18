@@ -12,7 +12,7 @@ use std::str::{Chars, FromStr};
 /// Deserialize an instance of type T from [`StrictYaml`](enum@crate::StrictYaml).
 ///
 /// ```
-/// use strict_yaml_rust::{StrictYaml, serde::from_strict_yaml};
+/// use strict_yaml_rust::{StrictYaml, strict_yaml::Hash, serde::from_strict_yaml};
 ///
 /// let yaml = StrictYaml::Array(
 ///     vec![

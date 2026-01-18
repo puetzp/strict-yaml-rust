@@ -3,8 +3,9 @@ use crate::scanner::{Marker, ScanError, TScalarStyle};
 use linked_hash_map::LinkedHashMap;
 #[cfg(feature = "serde")]
 use serde::de::{
-    Deserialize, DeserializeSeed, Deserializer, EnumAccess, Error as SerdeError, MapAccess,
-    SeqAccess, Unexpected, VariantAccess, Visitor,
+    value::StringDeserializer, Deserialize, DeserializeSeed, Deserializer, EnumAccess,
+    Error as SerdeError, IntoDeserializer, MapAccess, SeqAccess, Unexpected, VariantAccess,
+    Visitor,
 };
 use std::error::Error;
 use std::fmt;
@@ -291,12 +292,25 @@ impl<'de> serde::de::Deserializer<'de> for StrictYaml {
         self,
         _name: &'static str,
         _variants: &'static [&'static str],
-        _visitor: V,
+        visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        match self {
+            Self::String(variant) => visitor.visit_enum(Enum::new(variant, None)),
+            Self::Array(_) => Err(Self::Error::invalid_type(
+                Unexpected::Seq,
+                &"a map or a string",
+            )),
+            Self::Hash(mut hash) => match hash.pop_front() {
+                Some((variant, value)) => {
+                    visitor.visit_enum(Enum::new(variant.into_string().unwrap(), Some(value)))
+                }
+                _ => Err(Self::Error::invalid_type(Unexpected::Map, &"an enum")),
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -311,6 +325,96 @@ impl<'de> serde::de::Deserializer<'de> for StrictYaml {
         V: Visitor<'de>,
     {
         visitor.visit_unit()
+    }
+}
+
+struct Enum {
+    variant: String,
+    value: Option<StrictYaml>,
+}
+
+impl<'de> Enum {
+    fn new(variant: String, value: Option<StrictYaml>) -> Self {
+        Self { variant, value }
+    }
+}
+
+impl<'de> EnumAccess<'de> for Enum {
+    type Error = crate::serde::error::Error;
+    type Variant = Variant;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        let variant =
+            seed.deserialize::<StringDeserializer<Self::Error>>(self.variant.into_deserializer())?;
+        let visitor = Variant { value: self.value };
+        Ok((variant, visitor))
+    }
+}
+
+struct Variant {
+    value: Option<StrictYaml>,
+}
+
+impl<'de> VariantAccess<'de> for Variant {
+    type Error = crate::serde::error::Error;
+
+    fn unit_variant(self) -> Result<(), Self::Error> {
+        match self.value {
+            Some(value) => Deserialize::deserialize(value),
+            None => Ok(()),
+        }
+    }
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        match self.value {
+            Some(value) => seed.deserialize(value),
+            None => Err(Self::Error::invalid_type(
+                Unexpected::UnitVariant,
+                &"newtype variant",
+            )),
+        }
+    }
+
+    fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.value {
+            Some(v) => match v {
+                StrictYaml::Array(a) => visitor.visit_seq(ArrayAccess::new(a)),
+                _ => unreachable!(),
+            },
+            None => Err(Self::Error::invalid_type(
+                Unexpected::UnitVariant,
+                &"tuple variant",
+            )),
+        }
+    }
+
+    fn struct_variant<V>(
+        self,
+        _fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.value {
+            Some(v) => match v {
+                StrictYaml::Hash(h) => visitor.visit_map(HashAccess::new(h)),
+                _ => unreachable!(),
+            },
+            None => Err(Self::Error::invalid_type(
+                Unexpected::UnitVariant,
+                &"struct variant",
+            )),
+        }
     }
 }
 
