@@ -157,22 +157,31 @@ impl<'de> serde::de::Deserializer<'de> for StrictYaml {
         }
     }
 
-    fn deserialize_unit<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        match self {
+            Self::String(value) if value.is_empty() => visitor.visit_unit(),
+            Self::Array(value) if value.is_empty() => visitor.visit_unit(),
+            Self::Hash(value) if value.is_empty() => visitor.visit_unit(),
+            Self::BadValue => visitor.visit_unit(),
+            _ => Err(Self::Error::invalid_value(
+                Unexpected::Other("non-empty node"),
+                &"an empty string, array or map",
+            )),
+        }
     }
 
     fn deserialize_unit_struct<V>(
         self,
         _name: &'static str,
-        _visitor: V,
+        visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        self.deserialize_unit(visitor)
     }
 
     fn deserialize_newtype_struct<V>(
@@ -195,7 +204,20 @@ impl<'de> serde::de::Deserializer<'de> for StrictYaml {
                 Unexpected::Str(&value),
                 &"a sequence",
             )),
-            Self::Array(value) => visitor.visit_seq(ArrayAccess::new(value)),
+            Self::Array(value) => {
+                let len = value.len();
+                let mut deserializer = ArrayAccess::new(value);
+                let seq = visitor.visit_seq(&mut deserializer)?;
+
+                if deserializer.iter.len() != 0 {
+                    Err(Self::Error::invalid_length(
+                        len,
+                        &"fewer elements in sequence",
+                    ))
+                } else {
+                    Ok(seq)
+                }
+            }
             Self::Hash(_) => Err(Self::Error::invalid_type(Unexpected::Map, &"a sequence")),
             _ => unreachable!(),
         }
@@ -400,6 +422,13 @@ impl<'de> SeqAccess<'de> for ArrayAccess {
             None => Ok(None),
         }
     }
+
+    fn size_hint(&self) -> Option<usize> {
+        match self.iter.size_hint() {
+            (lower, Some(upper)) if lower == upper => Some(upper),
+            _ => None,
+        }
+    }
 }
 
 struct HashAccess {
@@ -514,5 +543,130 @@ impl<'de> Deserialize<'de> for StrictYaml {
             &["String", "Array", "Hash"],
             StrictYamlVisitor,
         )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        serde::from_strict_yaml,
+        strict_yaml::{Array, Hash, StrictYaml},
+    };
+    use serde::Deserialize;
+
+    #[test]
+    fn test_primitives() {
+        let input = StrictYaml::String("true".into());
+        assert_eq!(true, from_strict_yaml::<bool>(input).unwrap());
+
+        let input = StrictYaml::String("false".into());
+        assert_eq!(false, from_strict_yaml::<bool>(input).unwrap());
+
+        let input = StrictYaml::String("foobar".into());
+        assert_eq!(
+            "foobar".to_string(),
+            from_strict_yaml::<String>(input).unwrap()
+        );
+
+        let input = StrictYaml::String("100".into());
+        assert_eq!(100, from_strict_yaml::<u16>(input).unwrap());
+
+        let input = StrictYaml::String("-100".into());
+        assert_eq!(-100, from_strict_yaml::<i16>(input).unwrap());
+
+        let input = StrictYaml::String("100".into());
+        assert_eq!(100.0, from_strict_yaml::<f32>(input).unwrap());
+
+        let input = StrictYaml::String("-100.0".into());
+        assert_eq!(-100.0, from_strict_yaml::<f32>(input).unwrap());
+    }
+
+    #[test]
+    fn test_option() {
+        let input = StrictYaml::String("foobar".into());
+        assert_eq!(
+            Some("foobar".to_string()),
+            from_strict_yaml::<Option<String>>(input).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_unit() {
+        let input = StrictYaml::String(String::new());
+        assert_eq!((), from_strict_yaml::<()>(input).unwrap());
+
+        let input = StrictYaml::Array(Array::new());
+        assert_eq!((), from_strict_yaml::<()>(input).unwrap());
+
+        let input = StrictYaml::Hash(Hash::new());
+        assert_eq!((), from_strict_yaml::<()>(input).unwrap());
+    }
+
+    #[test]
+    fn test_unit_struct() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test;
+
+        let input = StrictYaml::String(String::new());
+
+        assert_eq!(Test, from_strict_yaml::<Test>(input).unwrap());
+    }
+
+    #[test]
+    fn test_newtype_struct() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test(String);
+
+        let input = StrictYaml::String("foobar".into());
+
+        assert_eq!(
+            Test("foobar".to_string()),
+            from_strict_yaml::<Test>(input).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_seq() {
+        let input = StrictYaml::Array(vec![
+            StrictYaml::String("10".into()),
+            StrictYaml::String("20".into()),
+            StrictYaml::String("30".into()),
+        ]);
+
+        assert_eq!(
+            vec![10, 20, 30],
+            from_strict_yaml::<Vec<u16>>(input).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_tuple() {
+        let input = StrictYaml::Array(vec![
+            StrictYaml::String("10".into()),
+            StrictYaml::String("20".into()),
+            StrictYaml::String("30".into()),
+        ]);
+
+        assert_eq!(
+            (10, 20, 30),
+            from_strict_yaml::<(u16, u16, u16)>(input).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_tuple_struct() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test(String, bool, u8);
+
+        let input = StrictYaml::Array(vec![
+            StrictYaml::String("foobar".into()),
+            StrictYaml::String("true".into()),
+            StrictYaml::String("20".into()),
+        ]);
+
+        assert_eq!(
+            Test("foobar".to_string(), true, 20),
+            from_strict_yaml::<Test>(input).unwrap()
+        );
     }
 }
