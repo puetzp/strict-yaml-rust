@@ -103,6 +103,12 @@ impl serde::de::Error for Error {
     }
 }
 
+impl serde::ser::Error for Error {
+    fn custom<T: fmt::Display>(msg: T) -> Self {
+        Error::Message(msg.to_string())
+    }
+}
+
 impl From<ScanError> for Error {
     fn from(error: ScanError) -> Self {
         Error::Message(error.to_string())
