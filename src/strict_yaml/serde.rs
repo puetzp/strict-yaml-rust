@@ -532,34 +532,16 @@ impl<'de> Deserialize<'de> for StrictYaml {
 
                 Ok(Self::Value::Hash(hash))
             }
-
-            fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
-            where
-                A: EnumAccess<'de>,
-            {
-                let (name, variant): (String, _) = data.variant()?;
-
-                match name.as_str() {
-                    "String" => variant.newtype_variant(),
-                    "Array" => variant.newtype_variant(),
-                    "Hash" => variant.newtype_variant(),
-                    _ => Err(A::Error::custom("unknown variant of enum StrictYaml")),
-                }
-            }
         }
 
-        deserializer.deserialize_enum(
-            "StrictYaml",
-            &["String", "Array", "Hash"],
-            StrictYamlVisitor,
-        )
+        deserializer.deserialize_any(StrictYamlVisitor)
     }
 }
 
 #[cfg(test)]
 mod test {
     use crate::{
-        serde::from_strict_yaml,
+        serde::{from_str, from_str_many, from_strict_yaml},
         strict_yaml::{Array, Hash, StrictYaml},
     };
     use serde::Deserialize;
@@ -722,5 +704,85 @@ mod test {
         };
 
         assert_eq!(expected, from_strict_yaml::<Test>(input).unwrap());
+    }
+
+    #[test]
+    fn test_deserialize_any_from_str() {
+        let input = r#"
+---
+foobar
+"#;
+
+        assert_eq!(
+            StrictYaml::String("foobar".into()),
+            from_str::<StrictYaml>(input).unwrap()
+        );
+
+        let input = r#"
+---
+- foo
+- bar
+- baz
+...
+"#;
+
+        assert_eq!(
+            StrictYaml::Array(vec![
+                StrictYaml::String("foo".into()),
+                StrictYaml::String("bar".into()),
+                StrictYaml::String("baz".into()),
+            ]),
+            from_str::<StrictYaml>(input).unwrap()
+        );
+
+        let input = r#"
+---
+foo: bar
+10: 20
+true: false
+...
+"#;
+
+        let mut hash = Hash::new();
+        hash.insert(
+            StrictYaml::String("foo".into()),
+            StrictYaml::String("bar".into()),
+        );
+        hash.insert(
+            StrictYaml::String("10".into()),
+            StrictYaml::String("20".into()),
+        );
+        hash.insert(
+            StrictYaml::String("true".into()),
+            StrictYaml::String("false".into()),
+        );
+
+        assert_eq!(
+            StrictYaml::Hash(hash),
+            from_str::<StrictYaml>(input).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_deserialize_any_from_str_many() {
+        let input = r#"
+---
+foo
+...
+---
+bar
+---
+baz
+...
+"#;
+
+        assert_eq!(
+            vec![
+                StrictYaml::String("foo".into()),
+                StrictYaml::String("bar".into()),
+                StrictYaml::String("baz".into())
+            ],
+            from_str_many::<Vec<StrictYaml>>(input).unwrap()
+        );
     }
 }

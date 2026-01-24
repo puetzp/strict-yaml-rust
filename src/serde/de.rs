@@ -55,13 +55,14 @@ impl<'de> Deserializer<'de> {
     }
 }
 
-/// Deserialize multiple YAML documents from the same stream into an
+/// Deserialize multiple StrictYAML documents from the same stream into an
 /// instance of a container `T`.
 ///
 /// The function serves as a hint to the deserializer to expect a
-/// multi-document YAML stream and process it accordingly. The hint from
-/// the user is necessary because YAML is not self-describing to the extent
-/// that JSON. The deserializer needs way to tell the difference between the
+/// multi-document StrictYAML stream and process it accordingly. The hint from
+/// the user is necessary because StrictYAML is not self-describing to the extent
+/// that JSON is when it comes to mapping StrictYaml to the `serde` data model.
+/// The deserializer needs a way to tell the difference between the
 /// following cases when it calls [`serde::Deserializer::deserialize_seq`]:
 ///
 /// ```yaml
@@ -220,11 +221,24 @@ where
 impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     type Error = Error;
 
-    fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, Error>
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
-        unimplemented!()
+        let (ev, mark) = self.parser.peek()?;
+
+        match ev {
+            Event::Scalar(_, _, _) => self.deserialize_str(visitor),
+            Event::SequenceStart(_) => self.deserialize_seq(visitor),
+            Event::MappingStart(_) => self.deserialize_map(visitor),
+            _ => {
+                return Err(Error::from_event(
+                    ev.clone(),
+                    mark.clone(),
+                    "a sequence, map or scalar",
+                ))
+            }
+        }
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Error>
