@@ -1,9 +1,11 @@
 use crate::{
-    emitter::{escape_str, need_quotes, StrictYamlEmitter},
+    //    emitter::{escape_str, need_quotes, StrictYamlEmitter},
     serde::error::Error,
+    strict_yaml::{self, StrictYaml},
 };
 use serde::{ser, Serialize};
 
+/*
 pub struct Serializer {
     emitter: StrictYamlEmitter,
 }
@@ -31,4 +33,9 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     type SerializeMap = Self;
     type SerializeStruct = Self;
     type SerializeStructVariant = Self;
+}
+ */
+
+pub fn to_strict_yaml<T: Serialize>(value: T) -> Result<StrictYaml, Error> {
+    value.serialize(strict_yaml::serde::ser::Serializer)
 }

@@ -10,9 +10,9 @@
 
 pub mod de;
 pub mod error;
-//pub mod ser;
+pub mod ser;
 
 pub use de::from_str;
 pub use de::from_str_many;
 pub use de::from_strict_yaml;
-//pub use ser::to_string;
+pub use ser::to_strict_yaml;

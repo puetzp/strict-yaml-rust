@@ -1,5 +1,5 @@
 #[cfg(feature = "serde")]
-mod serde;
+pub(crate) mod serde;
 
 use crate::parser::*;
 use crate::scanner::{Marker, ScanError, TScalarStyle};

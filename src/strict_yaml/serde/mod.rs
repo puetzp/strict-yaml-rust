@@ -1,2 +1,2 @@
 mod de;
-mod ser;
+pub(crate) mod ser;
