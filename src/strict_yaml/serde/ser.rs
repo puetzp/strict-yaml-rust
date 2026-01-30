@@ -73,7 +73,7 @@ impl ser::Serializer for Serializer {
         Ok(Self::Ok::String(v.to_string()))
     }
 
-    fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
+    fn serialize_bytes(self, _v: &[u8]) -> Result<Self::Ok, Self::Error> {
         unimplemented!()
     }
 
@@ -348,10 +348,7 @@ impl SerializeStructVariant for SerializeHash {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        serde::to_strict_yaml,
-        strict_yaml::{Array, Hash, StrictYaml},
-    };
+    use crate::{serde::to_strict_yaml, strict_yaml::StrictYaml};
     use serde::Serialize;
 
     #[test]

@@ -1,8 +1,9 @@
 use crate::{
+    emitter::EmitError,
     parser::Event,
     scanner::{Marker, ScanError},
 };
-use std::fmt;
+use std::{fmt, str};
 
 /// An error type that contains all possible error variants that may occur
 /// when serializing or deserializing StrictYaml data.
@@ -111,6 +112,24 @@ impl serde::ser::Error for Error {
 
 impl From<ScanError> for Error {
     fn from(error: ScanError) -> Self {
+        Error::Message(error.to_string())
+    }
+}
+
+impl From<EmitError> for Error {
+    fn from(error: EmitError) -> Self {
+        Error::Message(error.to_string())
+    }
+}
+
+impl From<fmt::Error> for Error {
+    fn from(error: fmt::Error) -> Self {
+        Error::Message(error.to_string())
+    }
+}
+
+impl From<str::Utf8Error> for Error {
+    fn from(error: str::Utf8Error) -> Self {
         Error::Message(error.to_string())
     }
 }
