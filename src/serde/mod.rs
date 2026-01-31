@@ -96,6 +96,26 @@ a:
     }
 
     #[test]
+    fn test_enum_tuple_variant_de_ser() {
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        enum Test {
+            #[serde(rename = "a")]
+            A(u8, bool, String),
+        }
+
+        let input = r#"---
+a:
+  - "1"
+  - "true"
+  - foobar"#;
+
+        let expected = Test::A(1, true, "foobar".to_string());
+
+        assert_eq!(expected, from_str::<Test>(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+    }
+
+    #[test]
     fn test_map_de_ser() {
         let input = r#"---
 a: foo

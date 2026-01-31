@@ -215,6 +215,13 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
+        if !self.nested {
+            writeln!(self.emitter.writer)?;
+        }
+
+        self.emitter.level += 1;
+        variant.serialize(&mut *self)?;
+        write!(self.emitter.writer, ":")?;
         self.serialize_seq(Some(len))
     }
 
