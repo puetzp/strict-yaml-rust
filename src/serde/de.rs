@@ -201,7 +201,7 @@ where
         deserializer.parser.next()?;
     }
 
-    let res = T::deserialize(&mut deserializer);
+    let res = T::deserialize(&mut deserializer)?;
 
     let (ev, _mark) = deserializer.parser.peek()?;
 
@@ -215,7 +215,7 @@ where
         return Err(Error::from_event(ev, mark, "the end of the stream"));
     }
 
-    res
+    Ok(res)
 }
 
 impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {

@@ -21,7 +21,11 @@ where
 
     let mut serializer = Serializer {
         emitter: StrictYamlEmitter::new(&mut out),
+        maybe_inline: false,
+        skip_newline: false,
     };
+
+    write!(serializer.emitter.writer, "---")?;
 
     value.serialize(&mut serializer)?;
 
@@ -30,15 +34,22 @@ where
 
 pub struct Serializer<'a> {
     emitter: StrictYamlEmitter<'a>,
+    maybe_inline: bool,
+    skip_newline: bool,
 }
 
-fn write_str<T: fmt::Display>(writer: &mut dyn fmt::Write, v: T) -> Result<(), Error> {
+fn write_str<T: fmt::Display>(serializer: &mut Serializer, v: T) -> Result<(), Error> {
     let s = v.to_string();
 
+    if serializer.maybe_inline {
+        serializer.emitter.writer.write_char(' ')?;
+        serializer.maybe_inline = false;
+    }
+
     if need_quotes(&s) {
-        escape_str(writer, &s)?;
+        escape_str(serializer.emitter.writer, &s)?;
     } else {
-        write!(writer, "{}", s)?;
+        write!(serializer.emitter.writer, "{}", s)?;
     }
 
     Ok(())
@@ -57,60 +68,61 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     type SerializeStructVariant = Self;
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-        write_str(self.emitter.writer, v)
+        write_str(&mut *self, v)
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
         let s = std::str::from_utf8(v)?;
-        write_str(self.emitter.writer, s)
+
+        write_str(&mut *self, s)
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
@@ -172,6 +184,8 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
             self.emitter.level += 1;
         }
 
+        self.maybe_inline = false;
+
         Ok(self)
     }
 
@@ -200,8 +214,11 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         if len == Some(0) {
             write!(self.emitter.writer, "{{}}")?;
-        } else {
+        } else if !self.skip_newline {
             self.emitter.level += 1;
+            self.maybe_inline = false;
+        } else {
+            self.maybe_inline = true;
         }
 
         Ok(self)
@@ -236,7 +253,9 @@ impl SerializeSeq for &'_ mut Serializer<'_> {
     {
         writeln!(self.emitter.writer)?;
         self.emitter.write_indent()?;
-        write!(self.emitter.writer, "- ")?;
+        write!(self.emitter.writer, "-")?;
+        self.maybe_inline = true;
+        self.skip_newline = true;
         value.serialize(&mut **self)?;
         Ok(())
     }
@@ -318,10 +337,15 @@ impl SerializeMap for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        writeln!(self.emitter.writer)?;
-        self.emitter.write_indent()?;
+        if !self.skip_newline {
+            writeln!(self.emitter.writer)?;
+            self.emitter.write_indent()?;
+        }
+
+        self.skip_newline = false;
         key.serialize(&mut **self)?;
-        write!(self.emitter.writer, ": ")?;
+        write!(self.emitter.writer, ":")?;
+        self.maybe_inline = true;
         Ok(())
     }
 
@@ -347,10 +371,15 @@ impl SerializeStruct for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        writeln!(self.emitter.writer)?;
-        self.emitter.write_indent()?;
+        if !self.skip_newline {
+            writeln!(self.emitter.writer)?;
+            self.emitter.write_indent()?;
+        }
+
+        self.skip_newline = false;
         key.serialize(&mut **self)?;
-        write!(self.emitter.writer, ": ")?;
+        write!(self.emitter.writer, ":")?;
+        self.maybe_inline = true;
         value.serialize(&mut **self)?;
         Ok(())
     }
@@ -369,10 +398,15 @@ impl SerializeStructVariant for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        writeln!(self.emitter.writer)?;
-        self.emitter.write_indent()?;
+        if !self.skip_newline {
+            writeln!(self.emitter.writer)?;
+            self.emitter.write_indent()?;
+        }
+
+        self.skip_newline = false;
         key.serialize(&mut **self)?;
-        write!(self.emitter.writer, ": ")?;
+        write!(self.emitter.writer, ":")?;
+        self.maybe_inline = true;
         value.serialize(&mut **self)?;
         Ok(())
     }
