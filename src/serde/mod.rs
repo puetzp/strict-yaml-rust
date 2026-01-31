@@ -193,4 +193,135 @@ a:
 
         assert_eq!(input, to_string(&yaml).unwrap());
     }
+
+    #[test]
+    fn test_enum_struct_deeply_nested() {
+        use std::{collections::HashMap, default::Default};
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        #[serde(deny_unknown_fields)]
+        struct Deployment {
+            #[serde(rename = "apiVersion")]
+            api_version: String,
+            kind: Kind,
+            metadata: Metadata,
+            spec: DeploymentSpec,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        enum Kind {
+            Deployment,
+            StatefulSet,
+            DaemonSet,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        #[serde(deny_unknown_fields)]
+        struct Metadata {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            name: Option<String>,
+            labels: HashMap<String, String>,
+            #[serde(default, skip_serializing)]
+            iteration: usize,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        #[serde(deny_unknown_fields)]
+        struct DeploymentSpec {
+            #[serde(default)]
+            replicas: usize,
+            selector: Selector,
+            template: Template,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        enum Selector {
+            #[serde(rename = "matchLabels")]
+            ByLabel(HashMap<String, String>),
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        #[serde(deny_unknown_fields)]
+        struct Template {
+            metadata: Metadata,
+            spec: ContainerSpec,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        #[serde(deny_unknown_fields)]
+        struct ContainerSpec {
+            containers: Vec<Container>,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        #[serde(deny_unknown_fields)]
+        struct Container {
+            name: String,
+            image: String,
+            ports: Vec<Port>,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        enum Port {
+            #[serde(rename = "containerPort")]
+            ContainerPort(usize),
+        }
+
+        let input = r#"---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  labels:
+    app: nginx
+spec:
+  replicas: "3"
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: "nginx:1.14.2"
+          ports:
+            - containerPort: "80""#;
+
+        let expected = Deployment {
+            api_version: "apps/v1".to_string(),
+            kind: Kind::Deployment,
+            metadata: Metadata {
+                name: Some("nginx-deployment".to_string()),
+                labels: HashMap::from([("app".to_string(), "nginx".to_string())]),
+                iteration: Default::default(),
+            },
+            spec: DeploymentSpec {
+                replicas: 3,
+                selector: Selector::ByLabel(HashMap::from([(
+                    "app".to_string(),
+                    "nginx".to_string(),
+                )])),
+                template: Template {
+                    metadata: Metadata {
+                        name: None,
+                        labels: HashMap::from([("app".to_string(), "nginx".to_string())]),
+                        iteration: Default::default(),
+                    },
+                    spec: ContainerSpec {
+                        containers: vec![Container {
+                            name: "nginx".to_string(),
+                            image: "nginx:1.14.2".to_string(),
+                            ports: vec![Port::ContainerPort(80)],
+                        }],
+                    },
+                },
+            },
+        };
+
+        assert_eq!(expected, from_str(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+    }
 }

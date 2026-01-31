@@ -176,12 +176,21 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     {
         if !self.nested {
             writeln!(self.emitter.writer)?;
+            self.emitter.level += 1;
+            self.emitter.write_indent()?;
         }
 
-        self.emitter.level += 1;
+        self.maybe_inline = false;
         variant.serialize(&mut *self)?;
         write!(self.emitter.writer, ":")?;
-        value.serialize(self)
+        self.maybe_inline = true;
+        let v = value.serialize(&mut *self)?;
+
+        if !self.nested {
+            self.emitter.level -= 1;
+        }
+
+        Ok(v)
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
@@ -220,6 +229,7 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         }
 
         self.emitter.level += 1;
+        self.emitter.write_indent()?;
         variant.serialize(&mut *self)?;
         write!(self.emitter.writer, ":")?;
         self.serialize_seq(Some(len))
@@ -257,6 +267,7 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         }
 
         self.emitter.level += 1;
+        self.emitter.write_indent()?;
         variant.serialize(&mut *self)?;
         write!(self.emitter.writer, ":")?;
         self.serialize_map(Some(len))
