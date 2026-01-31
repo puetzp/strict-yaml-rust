@@ -62,7 +62,12 @@ a:
 e:
   - f
   - g
-  - h: "[]""#;
+  - h: "[]"
+  - a:
+      - b
+      - c
+    d: e
+a: b"#;
 
         let yaml = from_str::<StrictYaml>(input).unwrap();
 
