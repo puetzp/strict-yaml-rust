@@ -25,7 +25,7 @@ mod test {
     use serde::{Deserialize, Serialize};
 
     #[test]
-    fn test_de_ser() {
+    fn test_struct_de_ser() {
         #[derive(Debug, Deserialize, PartialEq, Serialize)]
         #[serde(deny_unknown_fields)]
         struct Test {
@@ -50,7 +50,10 @@ d: "2""#;
 
         assert_eq!(expected, from_str::<Test>(input).unwrap());
         assert_eq!(input, to_string(&expected).unwrap());
+    }
 
+    #[test]
+    fn test_complex_de_ser() {
         let input = r#"---
 a:
   b:
@@ -60,6 +63,36 @@ e:
   - f
   - g
   - h: "[]""#;
+
+        let yaml = from_str::<StrictYaml>(input).unwrap();
+
+        assert_eq!(input, to_string(&yaml).unwrap());
+    }
+
+    #[test]
+    fn test_nested_map_de_ser() {
+        let input = r#"---
+a:
+  b:
+    c:
+      d:
+        e: f"#;
+
+        let yaml = from_str::<StrictYaml>(input).unwrap();
+
+        assert_eq!(input, to_string(&yaml).unwrap());
+    }
+
+    #[test]
+    fn test_nested_array_de_ser() {
+        let input = r#"---
+a:
+  - b
+  - - c
+    - d
+    - - e
+      - - f
+      - - e"#;
 
         let yaml = from_str::<StrictYaml>(input).unwrap();
 
