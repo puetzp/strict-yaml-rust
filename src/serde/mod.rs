@@ -53,6 +53,19 @@ d: "2""#;
     }
 
     #[test]
+    fn test_map_de_ser() {
+        let input = r#"---
+a: foo
+b: "50"
+c: "true"
+d: "2""#;
+
+        let yaml = from_str::<StrictYaml>(input).unwrap();
+
+        assert_eq!(input, to_string(&yaml).unwrap());
+    }
+
+    #[test]
     fn test_complex_de_ser() {
         let input = r#"---
 a:
@@ -63,11 +76,12 @@ e:
   - f
   - g
   - h: "[]"
+    d: "10"
   - a:
       - b
       - c
     d: e
-a: b"#;
+c: b"#;
 
         let yaml = from_str::<StrictYaml>(input).unwrap();
 

@@ -231,6 +231,10 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
             self.emitter.level += 1;
         }
 
+        if self.parent == Parent::Seq {
+            self.first = true;
+        }
+
         self.maybe_inline = false;
 
         Ok(self)
@@ -379,7 +383,9 @@ impl SerializeMap for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.parent == Parent::Map || self.parent == Parent::Root {
+        if self.first {
+            self.first = false;
+        } else {
             writeln!(self.emitter.writer)?;
             self.emitter.write_indent()?;
         }
@@ -415,7 +421,9 @@ impl SerializeStruct for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.parent == Parent::Map || self.parent == Parent::Root {
+        if self.first {
+            self.first = false;
+        } else {
             writeln!(self.emitter.writer)?;
             self.emitter.write_indent()?;
         }
@@ -445,7 +453,9 @@ impl SerializeStructVariant for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.parent == Parent::Map || self.parent == Parent::Root {
+        if self.first {
+            self.first = false;
+        } else {
             writeln!(self.emitter.writer)?;
             self.emitter.write_indent()?;
         }
