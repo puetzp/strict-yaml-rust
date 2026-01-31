@@ -28,7 +28,7 @@ use std::vec;
 /// }
 /// ```
 #[derive(Clone, PartialEq, PartialOrd, Debug, Eq, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(::serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(::serde::Serialize), serde(untagged))]
 pub enum StrictYaml {
     /// YAML scalar.
     String(String),

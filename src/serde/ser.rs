@@ -168,12 +168,19 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
         value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + Serialize,
     {
+        if !self.nested {
+            writeln!(self.emitter.writer)?;
+        }
+
+        self.emitter.level += 1;
+        variant.serialize(&mut *self)?;
+        write!(self.emitter.writer, ":")?;
         value.serialize(self)
     }
 
@@ -205,7 +212,7 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
         self.serialize_seq(Some(len))
@@ -235,9 +242,16 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
+        if !self.nested {
+            writeln!(self.emitter.writer)?;
+        }
+
+        self.emitter.level += 1;
+        variant.serialize(&mut *self)?;
+        write!(self.emitter.writer, ":")?;
         self.serialize_map(Some(len))
     }
 }
@@ -396,7 +410,6 @@ impl SerializeStruct for &'_ mut Serializer<'_> {
             self.emitter.write_indent()?;
         }
 
-        self.emitter.write_indent()?;
         key.serialize(&mut **self)?;
         write!(self.emitter.writer, ":")?;
         self.maybe_inline = true;
@@ -425,7 +438,6 @@ impl SerializeStructVariant for &'_ mut Serializer<'_> {
             self.emitter.write_indent()?;
         }
 
-        self.emitter.write_indent()?;
         key.serialize(&mut **self)?;
         write!(self.emitter.writer, ":")?;
         self.maybe_inline = true;

@@ -53,6 +53,49 @@ d: "2""#;
     }
 
     #[test]
+    fn test_enum_struct_variant_de_ser() {
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        enum Test {
+            #[serde(rename = "a")]
+            A { b: usize, c: bool, d: u8 },
+        }
+
+        let input = r#"---
+a:
+  b: "50"
+  c: "true"
+  d: "2""#;
+
+        let expected = Test::A {
+            b: 50,
+            c: true,
+            d: 2,
+        };
+
+        assert_eq!(expected, from_str::<Test>(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+    }
+
+    #[test]
+    fn test_enum_newtype_variant_de_ser() {
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        enum Test {
+            #[serde(rename = "a")]
+            A(Vec<u8>),
+        }
+
+        let input = r#"---
+a:
+  - "1"
+  - "2""#;
+
+        let expected = Test::A(vec![1, 2]);
+
+        assert_eq!(expected, from_str::<Test>(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+    }
+
+    #[test]
     fn test_map_de_ser() {
         let input = r#"---
 a: foo
