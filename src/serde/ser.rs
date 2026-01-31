@@ -9,13 +9,6 @@ use serde::ser::{
 };
 use std::fmt;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Parent {
-    Map,
-    Seq,
-    Root,
-}
-
 pub fn to_strict_yaml<T: Serialize>(value: T) -> Result<StrictYaml, Error> {
     value.serialize(strict_yaml::serde::ser::Serializer)
 }
@@ -28,9 +21,8 @@ where
 
     let mut serializer = Serializer {
         emitter: StrictYamlEmitter::new(&mut out),
-        first: false,
+        nested: false,
         maybe_inline: false,
-        parent: Parent::Root,
     };
 
     write!(serializer.emitter.writer, "---")?;
@@ -42,9 +34,8 @@ where
 
 pub struct Serializer<'a> {
     emitter: StrictYamlEmitter<'a>,
-    first: bool,
+    nested: bool,
     maybe_inline: bool,
-    parent: Parent,
 }
 
 fn write_str<T: fmt::Display>(serializer: &mut Serializer, v: T) -> Result<(), Error> {
@@ -193,10 +184,6 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
             self.emitter.level += 1;
         }
 
-        if self.parent == Parent::Seq {
-            self.first = true;
-        }
-
         self.maybe_inline = false;
 
         Ok(self)
@@ -231,10 +218,6 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
             self.emitter.level += 1;
         }
 
-        if self.parent == Parent::Seq {
-            self.first = true;
-        }
-
         self.maybe_inline = false;
 
         Ok(self)
@@ -267,18 +250,15 @@ impl SerializeSeq for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.first {
-            self.first = false;
-        } else {
+        if !self.nested {
             writeln!(self.emitter.writer)?;
             self.emitter.write_indent()?;
         }
 
         write!(self.emitter.writer, "- ")?;
-        let old_parent = self.parent;
-        self.parent = Parent::Seq;
+        self.nested = true;
         value.serialize(&mut **self)?;
-        self.parent = old_parent;
+        self.nested = false;
         Ok(())
     }
 
@@ -296,18 +276,15 @@ impl SerializeTuple for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.first {
-            self.first = false;
-        } else {
+        if !self.nested {
             writeln!(self.emitter.writer)?;
             self.emitter.write_indent()?;
         }
 
         write!(self.emitter.writer, "- ")?;
-        let old_parent = self.parent;
-        self.parent = Parent::Seq;
+        self.nested = true;
         value.serialize(&mut **self)?;
-        self.parent = old_parent;
+        self.nested = false;
         Ok(())
     }
 
@@ -325,18 +302,15 @@ impl SerializeTupleStruct for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.first {
-            self.first = false;
-        } else {
+        if !self.nested {
             writeln!(self.emitter.writer)?;
             self.emitter.write_indent()?;
         }
 
         write!(self.emitter.writer, "- ")?;
-        let old_parent = self.parent;
-        self.parent = Parent::Seq;
+        self.nested = true;
         value.serialize(&mut **self)?;
-        self.parent = old_parent;
+        self.nested = false;
         Ok(())
     }
 
@@ -354,18 +328,15 @@ impl SerializeTupleVariant for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.first {
-            self.first = false;
-        } else {
+        if !self.nested {
             writeln!(self.emitter.writer)?;
             self.emitter.write_indent()?;
         }
 
         write!(self.emitter.writer, "- ")?;
-        let old_parent = self.parent;
-        self.parent = Parent::Seq;
+        self.nested = true;
         value.serialize(&mut **self)?;
-        self.parent = old_parent;
+        self.nested = false;
         Ok(())
     }
 
@@ -383,8 +354,8 @@ impl SerializeMap for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.first {
-            self.first = false;
+        if self.nested {
+            self.nested = false;
         } else {
             writeln!(self.emitter.writer)?;
             self.emitter.write_indent()?;
@@ -400,10 +371,7 @@ impl SerializeMap for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        let old_parent = self.parent;
-        self.parent = Parent::Map;
         value.serialize(&mut **self)?;
-        self.parent = old_parent;
         Ok(())
     }
 
@@ -421,8 +389,8 @@ impl SerializeStruct for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.first {
-            self.first = false;
+        if self.nested {
+            self.nested = false;
         } else {
             writeln!(self.emitter.writer)?;
             self.emitter.write_indent()?;
@@ -432,10 +400,7 @@ impl SerializeStruct for &'_ mut Serializer<'_> {
         key.serialize(&mut **self)?;
         write!(self.emitter.writer, ":")?;
         self.maybe_inline = true;
-        let old_parent = self.parent;
-        self.parent = Parent::Map;
         value.serialize(&mut **self)?;
-        self.parent = old_parent;
         Ok(())
     }
 
@@ -453,8 +418,8 @@ impl SerializeStructVariant for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.first {
-            self.first = false;
+        if self.nested {
+            self.nested = false;
         } else {
             writeln!(self.emitter.writer)?;
             self.emitter.write_indent()?;
@@ -464,10 +429,7 @@ impl SerializeStructVariant for &'_ mut Serializer<'_> {
         key.serialize(&mut **self)?;
         write!(self.emitter.writer, ":")?;
         self.maybe_inline = true;
-        let old_parent = self.parent;
-        self.parent = Parent::Map;
         value.serialize(&mut **self)?;
-        self.parent = old_parent;
         Ok(())
     }
 

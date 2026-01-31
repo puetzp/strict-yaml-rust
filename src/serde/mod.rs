@@ -66,6 +66,19 @@ d: "2""#;
     }
 
     #[test]
+    fn test_array_de_ser() {
+        let input = r#"---
+- foo
+- "50"
+- "true"
+- "2""#;
+
+        let yaml = from_str::<StrictYaml>(input).unwrap();
+
+        assert_eq!(input, to_string(&yaml).unwrap());
+    }
+
+    #[test]
     fn test_complex_de_ser() {
         let input = r#"---
 a:
