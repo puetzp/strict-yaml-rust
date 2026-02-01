@@ -21,35 +21,44 @@ where
 
     let mut serializer = Serializer {
         emitter: StrictYamlEmitter::new(&mut out),
-        nested: false,
-        maybe_inline: false,
+        scope: None,
     };
 
     write!(serializer.emitter.writer, "---")?;
+    writeln!(serializer.emitter.writer)?;
 
     value.serialize(&mut serializer)?;
 
     Ok(out)
 }
 
+#[derive(Debug, PartialEq)]
+enum Scope {
+    Key,
+    Map,
+    Seq,
+}
+
 pub struct Serializer<'a> {
     emitter: StrictYamlEmitter<'a>,
-    nested: bool,
-    maybe_inline: bool,
+    scope: Option<Scope>,
 }
 
 fn write_str<T: fmt::Display>(serializer: &mut Serializer, v: T) -> Result<(), Error> {
     let s = v.to_string();
 
-    if serializer.maybe_inline {
+    if serializer.scope == Some(Scope::Key) {
         serializer.emitter.writer.write_char(' ')?;
-        serializer.maybe_inline = false;
     }
 
     if need_quotes(&s) {
         escape_str(serializer.emitter.writer, &s)?;
     } else {
         write!(serializer.emitter.writer, "{}", s)?;
+    }
+
+    if serializer.scope != Some(Scope::Map) {
+        writeln!(serializer.emitter.writer)?;
     }
 
     Ok(())
@@ -174,21 +183,27 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     where
         T: ?Sized + Serialize,
     {
-        if !self.nested {
+        if self.scope == Some(Scope::Key) {
             writeln!(self.emitter.writer)?;
-            self.emitter.level += 1;
+        }
+
+        self.emitter.level += 1;
+
+        if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
         }
 
-        self.maybe_inline = false;
+        let mut old_scope = self.scope.replace(Scope::Map);
         variant.serialize(&mut *self)?;
-        write!(self.emitter.writer, ":")?;
-        self.maybe_inline = true;
-        let v = value.serialize(&mut *self)?;
+        self.scope = old_scope.take();
 
-        if !self.nested {
-            self.emitter.level -= 1;
-        }
+        write!(self.emitter.writer, ":")?;
+
+        old_scope = self.scope.replace(Scope::Key);
+        let v = value.serialize(&mut *self)?;
+        self.scope = old_scope.take();
+
+        self.emitter.level -= 1;
 
         Ok(v)
     }
@@ -200,7 +215,9 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
             self.emitter.level += 1;
         }
 
-        self.maybe_inline = false;
+        if self.scope != Some(Scope::Seq) && !self.scope.is_none() {
+            writeln!(self.emitter.writer)?;
+        }
 
         Ok(self)
     }
@@ -224,14 +241,16 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        if !self.nested {
-            writeln!(self.emitter.writer)?;
-        }
-
         self.emitter.level += 1;
-        self.emitter.write_indent()?;
+
+        let mut old_scope = self.scope.replace(Scope::Map);
         variant.serialize(&mut *self)?;
+        self.scope = old_scope.take();
+
         write!(self.emitter.writer, ":")?;
+
+        self.scope.replace(Scope::Key);
+
         self.serialize_seq(Some(len))
     }
 
@@ -242,7 +261,9 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
             self.emitter.level += 1;
         }
 
-        self.maybe_inline = false;
+        if self.scope == Some(Scope::Key) {
+            writeln!(self.emitter.writer)?;
+        }
 
         Ok(self)
     }
@@ -262,14 +283,16 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        if !self.nested {
-            writeln!(self.emitter.writer)?;
-        }
-
         self.emitter.level += 1;
-        self.emitter.write_indent()?;
+
+        let mut old_scope = self.scope.replace(Scope::Map);
         variant.serialize(&mut *self)?;
+        self.scope = old_scope.take();
+
         write!(self.emitter.writer, ":")?;
+
+        self.scope.replace(Scope::Key);
+
         self.serialize_map(Some(len))
     }
 }
@@ -282,15 +305,18 @@ impl SerializeSeq for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if !self.nested {
-            writeln!(self.emitter.writer)?;
+        if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
+        } else {
+            self.scope = None;
         }
 
         write!(self.emitter.writer, "- ")?;
-        self.nested = true;
+
+        let mut old_scope = self.scope.replace(Scope::Seq);
         value.serialize(&mut **self)?;
-        self.nested = false;
+        self.scope = old_scope.take();
+
         Ok(())
     }
 
@@ -308,15 +334,18 @@ impl SerializeTuple for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if !self.nested {
-            writeln!(self.emitter.writer)?;
+        if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
+        } else {
+            self.scope = None;
         }
 
         write!(self.emitter.writer, "- ")?;
-        self.nested = true;
+
+        let mut old_scope = self.scope.replace(Scope::Seq);
         value.serialize(&mut **self)?;
-        self.nested = false;
+        self.scope = old_scope.take();
+
         Ok(())
     }
 
@@ -334,15 +363,18 @@ impl SerializeTupleStruct for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if !self.nested {
-            writeln!(self.emitter.writer)?;
+        if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
+        } else {
+            self.scope = None;
         }
 
         write!(self.emitter.writer, "- ")?;
-        self.nested = true;
+
+        let mut old_scope = self.scope.replace(Scope::Seq);
         value.serialize(&mut **self)?;
-        self.nested = false;
+        self.scope = old_scope.take();
+
         Ok(())
     }
 
@@ -360,15 +392,18 @@ impl SerializeTupleVariant for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if !self.nested {
-            writeln!(self.emitter.writer)?;
+        if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
+        } else {
+            self.scope = None;
         }
 
         write!(self.emitter.writer, "- ")?;
-        self.nested = true;
+
+        let mut old_scope = self.scope.replace(Scope::Seq);
         value.serialize(&mut **self)?;
-        self.nested = false;
+        self.scope = old_scope.take();
+
         Ok(())
     }
 
@@ -386,16 +421,18 @@ impl SerializeMap for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.nested {
-            self.nested = false;
-        } else {
-            writeln!(self.emitter.writer)?;
+        if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
+        } else {
+            self.scope = None;
         }
 
+        let mut old_scope = self.scope.replace(Scope::Map);
         key.serialize(&mut **self)?;
+        self.scope = old_scope.take();
+
         write!(self.emitter.writer, ":")?;
-        self.maybe_inline = true;
+
         Ok(())
     }
 
@@ -403,7 +440,9 @@ impl SerializeMap for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
+        let mut old_scope = self.scope.replace(Scope::Key);
         value.serialize(&mut **self)?;
+        self.scope = old_scope.take();
         Ok(())
     }
 
@@ -421,17 +460,22 @@ impl SerializeStruct for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.nested {
-            self.nested = false;
-        } else {
-            writeln!(self.emitter.writer)?;
+        if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
+        } else {
+            self.scope = None;
         }
 
+        let mut old_scope = self.scope.replace(Scope::Map);
         key.serialize(&mut **self)?;
+        self.scope = old_scope.take();
+
         write!(self.emitter.writer, ":")?;
-        self.maybe_inline = true;
+
+        old_scope = self.scope.replace(Scope::Key);
         value.serialize(&mut **self)?;
+        self.scope = old_scope.take();
+
         Ok(())
     }
 
@@ -449,17 +493,22 @@ impl SerializeStructVariant for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.nested {
-            self.nested = false;
-        } else {
-            writeln!(self.emitter.writer)?;
+        if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
+        } else {
+            self.scope = None;
         }
 
+        let mut old_scope = self.scope.replace(Scope::Map);
         key.serialize(&mut **self)?;
+        self.scope = old_scope.take();
+
         write!(self.emitter.writer, ":")?;
-        self.maybe_inline = true;
+
+        old_scope = self.scope.replace(Scope::Key);
         value.serialize(&mut **self)?;
+        self.scope = old_scope.take();
+
         Ok(())
     }
 

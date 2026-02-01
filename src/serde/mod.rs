@@ -25,6 +25,65 @@ mod test {
     use serde::{Deserialize, Serialize};
 
     #[test]
+    fn test_primitive_de_ser() {
+        let input = r#"---
+"true"
+"#;
+
+        assert_eq!(true, from_str(input).unwrap());
+        assert_eq!(input, to_string(&true).unwrap());
+
+        let input = r#"---
+"false"
+"#;
+
+        assert_eq!(false, from_str(input).unwrap());
+        assert_eq!(input, to_string(&false).unwrap());
+
+        let input = r#"---
+foobar
+"#;
+
+        assert_eq!("foobar".to_string(), from_str::<String>(input).unwrap());
+        assert_eq!(input, to_string(&"foobar").unwrap());
+
+        let input = r#"---
+"78"
+"#;
+
+        assert_eq!(78, from_str(input).unwrap());
+        assert_eq!(input, to_string(&78).unwrap());
+
+        let input = r#"---
+"-78"
+"#;
+
+        assert_eq!(-78, from_str(input).unwrap());
+        assert_eq!(input, to_string(&-78).unwrap());
+
+        let input = r#"---
+"7.8"
+"#;
+
+        assert_eq!(7.8, from_str(input).unwrap());
+        assert_eq!(input, to_string(&7.8).unwrap());
+
+        let input = r#"---
+"-7.8"
+"#;
+
+        assert_eq!(-7.8, from_str(input).unwrap());
+        assert_eq!(input, to_string(&-7.8).unwrap());
+
+        let input = r#"---
+"%"
+"#;
+
+        assert_eq!('%', from_str(input).unwrap());
+        assert_eq!(input, to_string(&'%').unwrap());
+    }
+
+    #[test]
     fn test_struct_de_ser() {
         #[derive(Debug, Deserialize, PartialEq, Serialize)]
         #[serde(deny_unknown_fields)]
@@ -39,7 +98,8 @@ mod test {
 a: foo
 b: "50"
 c: "true"
-d: "2""#;
+d: "2"
+"#;
 
         let expected = Test {
             a: "foo".to_string(),
@@ -64,7 +124,8 @@ d: "2""#;
 a:
   b: "50"
   c: "true"
-  d: "2""#;
+  d: "2"
+"#;
 
         let expected = Test::A {
             b: 50,
@@ -87,7 +148,8 @@ a:
         let input = r#"---
 a:
   - "1"
-  - "2""#;
+  - "2"
+"#;
 
         let expected = Test::A(vec![1, 2]);
 
@@ -107,7 +169,8 @@ a:
 a:
   - "1"
   - "true"
-  - foobar"#;
+  - foobar
+"#;
 
         let expected = Test::A(1, true, "foobar".to_string());
 
@@ -121,7 +184,8 @@ a:
 a: foo
 b: "50"
 c: "true"
-d: "2""#;
+d: "2"
+"#;
 
         let yaml = from_str::<StrictYaml>(input).unwrap();
 
@@ -134,7 +198,8 @@ d: "2""#;
 - foo
 - "50"
 - "true"
-- "2""#;
+- "2"
+"#;
 
         let yaml = from_str::<StrictYaml>(input).unwrap();
 
@@ -157,7 +222,8 @@ e:
       - b
       - c
     d: e
-c: b"#;
+c: b
+"#;
 
         let yaml = from_str::<StrictYaml>(input).unwrap();
 
@@ -171,7 +237,8 @@ a:
   b:
     c:
       d:
-        e: f"#;
+        e: f
+"#;
 
         let yaml = from_str::<StrictYaml>(input).unwrap();
 
@@ -187,7 +254,8 @@ a:
     - d
     - - e
       - - f
-      - - e"#;
+      - - e
+"#;
 
         let yaml = from_str::<StrictYaml>(input).unwrap();
 
@@ -288,7 +356,9 @@ spec:
         - name: nginx
           image: "nginx:1.14.2"
           ports:
-            - containerPort: "80""#;
+            - containerPort: "80"
+            - containerPort: "443"
+"#;
 
         let expected = Deployment {
             api_version: "apps/v1".to_string(),
@@ -314,7 +384,7 @@ spec:
                         containers: vec![Container {
                             name: "nginx".to_string(),
                             image: "nginx:1.14.2".to_string(),
-                            ports: vec![Port::ContainerPort(80)],
+                            ports: vec![Port::ContainerPort(80), Port::ContainerPort(443)],
                         }],
                     },
                 },
