@@ -84,6 +84,101 @@ foobar
     }
 
     #[test]
+    fn test_option_de_ser() {
+        let input = r#"---
+foobar
+"#;
+
+        let expected = Some("foobar".to_string());
+
+        assert_eq!(expected, from_str::<Option<String>>(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+    }
+
+    #[test]
+    fn test_unit_de_ser() {
+        assert_eq!((), from_str("").unwrap());
+
+        let input = r#"---
+"#;
+
+        assert_eq!((), from_str(input).unwrap());
+        assert_eq!(input, to_string(&()).unwrap());
+    }
+
+    #[test]
+    fn test_unit_struct_de_ser() {
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        struct Test;
+
+        let input = r#"---
+"#;
+
+        assert_eq!(Test, from_str(input).unwrap());
+        assert_eq!(input, to_string(&Test).unwrap());
+    }
+
+    #[test]
+    fn test_newtype_struct_de_ser() {
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        struct Test(String);
+
+        let input = r#"---
+foobar
+"#;
+
+        let expected = Test("foobar".to_string());
+
+        assert_eq!(expected, from_str(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+    }
+
+    #[test]
+    fn test_vec_de_ser() {
+        let input = r#"---
+- foo
+- bar
+- foobar
+"#;
+
+        let expected = vec!["foo", "bar", "foobar"];
+
+        assert_eq!(expected, from_str::<Vec<String>>(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+    }
+
+    #[test]
+    fn test_tuple_de_ser() {
+        let input = r#"---
+- foobar
+- "false"
+- "8"
+"#;
+
+        let expected = ("foobar".to_string(), false, 8);
+
+        assert_eq!(expected, from_str::<(String, bool, u8)>(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+    }
+
+    #[test]
+    fn test_tuple_struct_de_ser() {
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        struct Test(String, bool, u8);
+
+        let input = r#"---
+- foobar
+- "false"
+- "8"
+"#;
+
+        let expected = Test("foobar".to_string(), false, 8);
+
+        assert_eq!(expected, from_str(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+    }
+
+    #[test]
     fn test_struct_de_ser() {
         #[derive(Debug, Deserialize, PartialEq, Serialize)]
         #[serde(deny_unknown_fields)]
@@ -109,6 +204,78 @@ d: "2"
         };
 
         assert_eq!(expected, from_str::<Test>(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+    }
+
+    #[test]
+    fn test_complex_struct() {
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        struct Test {
+            a: bool,
+            b: Vec<Item>,
+            c: (u8, u8, bool),
+            d: Sub,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        struct Item {
+            foo: String,
+            bar: f64,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        struct Sub {
+            x: bool,
+            y: String,
+            z: i64,
+        }
+
+        let input = r#"---
+a: "false"
+b:
+  - foo: some value
+    bar: "100.1234"
+  - foo: other value
+    bar: "101.1234"
+  - foo: final value
+    bar: "102.1234"
+c:
+  - "10"
+  - "12"
+  - "false"
+d:
+  x: "false"
+  y: |
+    foo
+    bar
+  z: "6"
+"#;
+
+        let expected = Test {
+            a: false,
+            b: vec![
+                Item {
+                    foo: "some value".to_string(),
+                    bar: 100.1234,
+                },
+                Item {
+                    foo: "other value".to_string(),
+                    bar: 101.1234,
+                },
+                Item {
+                    foo: "final value".to_string(),
+                    bar: 102.1234,
+                },
+            ],
+            c: (10, 12, false),
+            d: Sub {
+                z: 6,
+                x: false,
+                y: "foo\nbar\n".to_string(),
+            },
+        };
+
+        assert_eq!(expected, from_str(input).unwrap());
         assert_eq!(input, to_string(&expected).unwrap());
     }
 
