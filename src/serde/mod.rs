@@ -27,6 +27,17 @@ mod test {
     #[test]
     fn test_primitive_de_ser() {
         let input = r#"---
+|
+  foo
+  bar
+"#;
+
+        let expected = "foo\nbar\n".to_string();
+
+        assert_eq!(expected, from_str::<String>(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+
+        let input = r#"---
 "true"
 "#;
 
@@ -348,7 +359,10 @@ a:
     #[test]
     fn test_map_de_ser() {
         let input = r#"---
-a: foo
+a: |
+  foo
+  bar
+  baz
 b: "50"
 c: "true"
 d: "2"

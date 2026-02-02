@@ -44,21 +44,42 @@ pub struct Serializer<'a> {
     scope: Option<Scope>,
 }
 
-fn write_str<T: fmt::Display>(serializer: &mut Serializer, v: T) -> Result<(), Error> {
+fn write_str<T: fmt::Display>(
+    serializer: &mut Serializer,
+    v: T,
+    maybe_multi_line: bool,
+) -> Result<(), Error> {
     let s = v.to_string();
 
     if serializer.scope == Some(Scope::Key) {
         serializer.emitter.writer.write_char(' ')?;
     }
 
-    if need_quotes(&s) {
-        escape_str(serializer.emitter.writer, &s)?;
-    } else {
-        write!(serializer.emitter.writer, "{}", s)?;
-    }
-
-    if serializer.scope != Some(Scope::Map) {
+    if maybe_multi_line && s.ends_with('\n') {
+        serializer.emitter.writer.write_char('|')?;
         writeln!(serializer.emitter.writer)?;
+
+        let level_delta = if serializer.emitter.level < 0 { 2 } else { 1 };
+
+        serializer.emitter.level += level_delta;
+
+        for line in s.lines() {
+            serializer.emitter.write_indent()?;
+            serializer.emitter.writer.write_str(line)?;
+            writeln!(serializer.emitter.writer)?;
+        }
+
+        serializer.emitter.level -= level_delta;
+    } else {
+        if need_quotes(&s) {
+            escape_str(serializer.emitter.writer, &s)?;
+        } else {
+            serializer.emitter.writer.write_str(&s)?;
+        }
+
+        if serializer.scope != Some(Scope::Map) {
+            writeln!(serializer.emitter.writer)?;
+        }
     }
 
     Ok(())
@@ -77,61 +98,61 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     type SerializeStructVariant = Self;
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, false)
     }
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-        write_str(&mut *self, v)
+        write_str(&mut *self, v, true)
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
         let s = std::str::from_utf8(v)?;
 
-        write_str(&mut *self, s)
+        write_str(&mut *self, s, true)
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
