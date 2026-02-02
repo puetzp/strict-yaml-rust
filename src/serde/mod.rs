@@ -17,6 +17,7 @@ pub use de::from_str_many;
 pub use de::from_strict_yaml;
 pub use ser::to_strict_yaml;
 pub use ser::to_string;
+pub use ser::to_string_many;
 
 #[cfg(test)]
 mod test {
@@ -219,7 +220,7 @@ d: "2"
     }
 
     #[test]
-    fn test_complex_struct() {
+    fn test_complex_struct_de_ser() {
         #[derive(Debug, Deserialize, PartialEq, Serialize)]
         struct Test {
             a: bool,
@@ -321,6 +322,7 @@ a:
         enum Test {
             #[serde(rename = "a")]
             A(Vec<u8>),
+            B(String),
         }
 
         let input = r#"---
@@ -332,6 +334,17 @@ a:
         let expected = Test::A(vec![1, 2]);
 
         assert_eq!(expected, from_str::<Test>(input).unwrap());
+        assert_eq!(input, to_string(&expected).unwrap());
+
+        let input = r#"---
+B: |
+  foo
+  bar
+"#;
+
+        let expected = Test::B("foo\nbar\n".to_string());
+
+        assert_eq!(expected, from_str(input).unwrap());
         assert_eq!(input, to_string(&expected).unwrap());
     }
 
@@ -354,6 +367,33 @@ a:
 
         assert_eq!(expected, from_str::<Test>(input).unwrap());
         assert_eq!(input, to_string(&expected).unwrap());
+    }
+
+    #[test]
+    fn test_enum_unit_variant_de_ser() {
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        enum Test {
+            First,
+            Second,
+        }
+
+        let input = r#"---
+First
+"#;
+
+        assert_eq!(Test::First, from_str(input).unwrap());
+        assert_eq!(input, to_string(&Test::First).unwrap());
+
+        let input = r#"---
+First
+---
+Second
+"#;
+
+        let expected = vec![Test::First, Test::Second];
+
+        assert_eq!(expected, from_str_many::<Vec<Test>>(input).unwrap());
+        assert_eq!(input, to_string_many(&expected).unwrap());
     }
 
     #[test]
@@ -444,7 +484,7 @@ a:
     }
 
     #[test]
-    fn test_enum_struct_deeply_nested() {
+    fn test_enum_struct_deeply_nested_de_ser() {
         use std::{collections::HashMap, default::Default};
 
         #[derive(Debug, Deserialize, PartialEq, Serialize)]
@@ -574,5 +614,68 @@ spec:
 
         assert_eq!(expected, from_str(input).unwrap());
         assert_eq!(input, to_string(&expected).unwrap());
+    }
+
+    #[test]
+    fn test_multiple_documents_de_ser() {
+        let input = r#"---
+foobar
+---
+barfoo
+---
+end
+"#;
+
+        let expected = vec![
+            "foobar".to_string(),
+            "barfoo".to_string(),
+            "end".to_string(),
+        ];
+
+        assert_eq!(expected, from_str_many::<Vec<String>>(input).unwrap());
+        assert_eq!(input, to_string_many(&expected).unwrap());
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        #[serde(deny_unknown_fields)]
+        struct Test {
+            a: String,
+            b: usize,
+            c: bool,
+        }
+
+        let input = r#"---
+a: foo
+b: "50"
+c: "true"
+---
+a: bar
+b: "10"
+c: "false"
+---
+a: end
+b: "20"
+c: "false"
+"#;
+
+        let expected = vec![
+            Test {
+                a: "foo".to_string(),
+                b: 50,
+                c: true,
+            },
+            Test {
+                a: "bar".to_string(),
+                b: 10,
+                c: false,
+            },
+            Test {
+                a: "end".to_string(),
+                b: 20,
+                c: false,
+            },
+        ];
+
+        assert_eq!(expected, from_str_many::<Vec<Test>>(input).unwrap());
+        assert_eq!(input, to_string_many(&expected).unwrap());
     }
 }

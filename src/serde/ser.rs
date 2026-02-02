@@ -22,6 +22,7 @@ where
     let mut serializer = Serializer {
         emitter: StrictYamlEmitter::new(&mut out),
         scope: None,
+        multi_doc: false,
     };
 
     write!(serializer.emitter.writer, "---")?;
@@ -32,8 +33,26 @@ where
     Ok(out)
 }
 
+pub fn to_string_many<T>(value: &T) -> Result<String, Error>
+where
+    T: Serialize,
+{
+    let mut out = String::new();
+
+    let mut serializer = Serializer {
+        emitter: StrictYamlEmitter::new(&mut out),
+        scope: None,
+        multi_doc: true,
+    };
+
+    value.serialize(&mut serializer)?;
+
+    Ok(out)
+}
+
 #[derive(Debug, PartialEq)]
 enum Scope {
+    Root,
     Key,
     Map,
     Seq,
@@ -42,6 +61,7 @@ enum Scope {
 pub struct Serializer<'a> {
     emitter: StrictYamlEmitter<'a>,
     scope: Option<Scope>,
+    multi_doc: bool,
 }
 
 fn write_str<T: fmt::Display>(
@@ -230,13 +250,19 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        if len == Some(0) {
-            write!(self.emitter.writer, "[]")?;
-        } else {
-            self.emitter.level += 1;
+        if self.multi_doc && self.scope.is_none() {
+            self.scope = Some(Scope::Root);
         }
 
-        if self.scope != Some(Scope::Seq) && !self.scope.is_none() {
+        if self.scope != Some(Scope::Root) {
+            if len == Some(0) {
+                write!(self.emitter.writer, "[]")?;
+            } else {
+                self.emitter.level += 1;
+            }
+        }
+
+        if self.scope == Some(Scope::Map) || self.scope == Some(Scope::Key) {
             writeln!(self.emitter.writer)?;
         }
 
@@ -326,23 +352,34 @@ impl SerializeSeq for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.scope != Some(Scope::Seq) {
-            self.emitter.write_indent()?;
+        if self.scope == Some(Scope::Root) {
+            write!(self.emitter.writer, "---")?;
+            writeln!(self.emitter.writer)?;
+            value.serialize(&mut **self)?;
         } else {
-            self.scope = None;
+            if self.scope != Some(Scope::Seq) {
+                self.emitter.write_indent()?;
+            } else {
+                self.scope = None;
+            }
+
+            write!(self.emitter.writer, "- ")?;
+
+            let mut old_scope = self.scope.replace(Scope::Seq);
+            value.serialize(&mut **self)?;
+            self.scope = old_scope.take();
         }
-
-        write!(self.emitter.writer, "- ")?;
-
-        let mut old_scope = self.scope.replace(Scope::Seq);
-        value.serialize(&mut **self)?;
-        self.scope = old_scope.take();
 
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
         self.emitter.level -= 1;
+
+        if self.scope == Some(Scope::Root) {
+            self.scope = None;
+        }
+
         Ok(())
     }
 }
