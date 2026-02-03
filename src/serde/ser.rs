@@ -356,6 +356,8 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         variant.serialize(self)
     }
 
+    /// Newtype structs are serialized by serializing the inner
+    /// value and ignoring the wrapper.
     fn serialize_newtype_struct<T>(
         self,
         _name: &'static str,
@@ -367,7 +369,7 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         value.serialize(self)
     }
 
-    /// Newtypes are serialized as maps, i.e. `key: value`, where
+    /// Newtype enums are serialized as maps, i.e. `key: value`, where
     /// `variant` is the key and the value is any type that implements
     /// `Serialize`.
     fn serialize_newtype_variant<T>(
@@ -414,6 +416,9 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+        // Unless the values in the sequence are serialized as
+        // multiple documents (as indicated by `self.scope`), empty
+        // sequences are serialized inline with empty brackets.
         if self.scope != Some(Scope::Root) {
             if len == Some(0) {
                 write!(self.emitter.writer, "[]")?;
@@ -422,7 +427,10 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
             }
         }
 
-        if self.scope == Some(Scope::Map) || self.scope == Some(Scope::Key) {
+        // A newline must come before a sequence when the sequence
+        // follows a map key. In contrast a sequence that is nested in
+        // another sequence is started on the same line following the dash `-`.
+        if self.scope == Some(Scope::Key) {
             writeln!(self.emitter.writer)?;
         }
 
@@ -441,6 +449,8 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         self.serialize_seq(Some(len))
     }
 
+    /// Tuple variant enums are serialized as maps, i.e. `key: value`,
+    /// where `variant` is the key and the value is a sequence.
     fn serialize_tuple_variant(
         self,
         _name: &'static str,
@@ -448,8 +458,22 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
+        // Start with a newline if the tuple variant is a nested value
+        // inside a map with a given key.
+        if self.scope == Some(Scope::Key) {
+            writeln!(self.emitter.writer)?;
+        }
+
         self.emitter.level += 1;
 
+        // Skip indentation if the tuple variant is nested inside a
+        // sequence and the key/variant follows a dash `-`.
+        if self.scope != Some(Scope::Seq) {
+            self.emitter.write_indent()?;
+        }
+
+        // Serialize the variant as if it were a key in a regular
+        // map.
         let mut old_scope = self.scope.replace(Scope::Map);
         variant.serialize(&mut *self)?;
         self.scope = old_scope.take();
@@ -458,6 +482,8 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
 
         self.scope.replace(Scope::Key);
 
+        // Serialize the tuple as if it were a value in a regular
+        // map following a key.
         self.serialize_seq(Some(len))
     }
 
@@ -468,6 +494,8 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
             self.emitter.level += 1;
         }
 
+        // When the map is nested inside another map the preceding
+        // key must first be followed by a newline.
         if self.scope == Some(Scope::Key) {
             writeln!(self.emitter.writer)?;
         }
@@ -490,8 +518,22 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
+        // Start with a newline if the tuple variant is a nested value
+        // inside a map with a given key.
+        if self.scope == Some(Scope::Key) {
+            writeln!(self.emitter.writer)?;
+        }
+
         self.emitter.level += 1;
 
+        // Skip indentation if the tuple variant is nested inside a
+        // sequence and the key/variant follows a dash `-`.
+        if self.scope != Some(Scope::Seq) {
+            self.emitter.write_indent()?;
+        }
+
+        // Serialize the variant as if it were a key in a regular
+        // map.
         let mut old_scope = self.scope.replace(Scope::Map);
         variant.serialize(&mut *self)?;
         self.scope = old_scope.take();
@@ -500,6 +542,8 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
 
         self.scope.replace(Scope::Key);
 
+        // Serialize the value as a nested map following a key from
+        // the parent map.
         self.serialize_map(Some(len))
     }
 }
