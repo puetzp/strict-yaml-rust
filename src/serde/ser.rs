@@ -556,6 +556,9 @@ impl SerializeSeq for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
+        // The `Root` scope indicates to the serializer that the sequence
+        // is to be serialized as a multi-line StrictYAML stream.
+        // As such each element is preceded by document delimiters.
         if self.scope == Some(Scope::Root) {
             write!(self.emitter.writer, "---")?;
             writeln!(self.emitter.writer)?;
@@ -564,6 +567,9 @@ impl SerializeSeq for &'_ mut Serializer<'_> {
             value.serialize(&mut **self)?;
             self.scope = old_scope.take();
         } else {
+            // Otherwise the sequence is serialized in a regular manner.
+            // Indentation is skipped for this element if it is the
+            // first element from a sequence nested in another sequence.
             if self.scope != Some(Scope::Seq) {
                 self.emitter.write_indent()?;
             } else {
@@ -599,23 +605,43 @@ impl SerializeTuple for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.scope != Some(Scope::Seq) {
-            self.emitter.write_indent()?;
+        // The `Root` scope indicates to the serializer that the sequence
+        // is to be serialized as a multi-line StrictYAML stream.
+        // As such each element is preceded by document delimiters.
+        if self.scope == Some(Scope::Root) {
+            write!(self.emitter.writer, "---")?;
+            writeln!(self.emitter.writer)?;
+
+            let mut old_scope = self.scope.take();
+            value.serialize(&mut **self)?;
+            self.scope = old_scope.take();
         } else {
-            self.scope = None;
+            // Otherwise the sequence is serialized in a regular manner.
+            // Indentation is skipped for this element if it is the
+            // first element from a sequence nested in another sequence.
+            if self.scope != Some(Scope::Seq) {
+                self.emitter.write_indent()?;
+            } else {
+                self.scope = None;
+            }
+
+            write!(self.emitter.writer, "- ")?;
+
+            let mut old_scope = self.scope.replace(Scope::Seq);
+            value.serialize(&mut **self)?;
+            self.scope = old_scope.take();
         }
-
-        write!(self.emitter.writer, "- ")?;
-
-        let mut old_scope = self.scope.replace(Scope::Seq);
-        value.serialize(&mut **self)?;
-        self.scope = old_scope.take();
 
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
         self.emitter.level -= 1;
+
+        if self.scope == Some(Scope::Root) {
+            self.scope = None;
+        }
+
         Ok(())
     }
 }
@@ -628,23 +654,43 @@ impl SerializeTupleStruct for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.scope != Some(Scope::Seq) {
-            self.emitter.write_indent()?;
+        // The `Root` scope indicates to the serializer that the sequence
+        // is to be serialized as a multi-line StrictYAML stream.
+        // As such each element is preceded by document delimiters.
+        if self.scope == Some(Scope::Root) {
+            write!(self.emitter.writer, "---")?;
+            writeln!(self.emitter.writer)?;
+
+            let mut old_scope = self.scope.take();
+            value.serialize(&mut **self)?;
+            self.scope = old_scope.take();
         } else {
-            self.scope = None;
+            // Otherwise the sequence is serialized in a regular manner.
+            // Indentation is skipped for this element if it is the
+            // first element from a sequence nested in another sequence.
+            if self.scope != Some(Scope::Seq) {
+                self.emitter.write_indent()?;
+            } else {
+                self.scope = None;
+            }
+
+            write!(self.emitter.writer, "- ")?;
+
+            let mut old_scope = self.scope.replace(Scope::Seq);
+            value.serialize(&mut **self)?;
+            self.scope = old_scope.take();
         }
-
-        write!(self.emitter.writer, "- ")?;
-
-        let mut old_scope = self.scope.replace(Scope::Seq);
-        value.serialize(&mut **self)?;
-        self.scope = old_scope.take();
 
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
         self.emitter.level -= 1;
+
+        if self.scope == Some(Scope::Root) {
+            self.scope = None;
+        }
+
         Ok(())
     }
 }
@@ -657,23 +703,43 @@ impl SerializeTupleVariant for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
-        if self.scope != Some(Scope::Seq) {
-            self.emitter.write_indent()?;
+        // The `Root` scope indicates to the serializer that the sequence
+        // is to be serialized as a multi-line StrictYAML stream.
+        // As such each element is preceded by document delimiters.
+        if self.scope == Some(Scope::Root) {
+            write!(self.emitter.writer, "---")?;
+            writeln!(self.emitter.writer)?;
+
+            let mut old_scope = self.scope.take();
+            value.serialize(&mut **self)?;
+            self.scope = old_scope.take();
         } else {
-            self.scope = None;
+            // Otherwise the sequence is serialized in a regular manner.
+            // Indentation is skipped for this element if it is the
+            // first element from a sequence nested in another sequence.
+            if self.scope != Some(Scope::Seq) {
+                self.emitter.write_indent()?;
+            } else {
+                self.scope = None;
+            }
+
+            write!(self.emitter.writer, "- ")?;
+
+            let mut old_scope = self.scope.replace(Scope::Seq);
+            value.serialize(&mut **self)?;
+            self.scope = old_scope.take();
         }
-
-        write!(self.emitter.writer, "- ")?;
-
-        let mut old_scope = self.scope.replace(Scope::Seq);
-        value.serialize(&mut **self)?;
-        self.scope = old_scope.take();
 
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
         self.emitter.level -= 1;
+
+        if self.scope == Some(Scope::Root) {
+            self.scope = None;
+        }
+
         Ok(())
     }
 }
@@ -686,6 +752,8 @@ impl SerializeMap for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
+        // Skip the indentation if this key is the first in a nested map
+        // inside a sequence, to follow the dash `-` directly.
         if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
         } else {
@@ -725,6 +793,8 @@ impl SerializeStruct for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
+        // Skip the indentation if this key is the first in a nested map
+        // inside a sequence, to follow the dash `-` directly.
         if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
         } else {
@@ -758,6 +828,8 @@ impl SerializeStructVariant for &'_ mut Serializer<'_> {
     where
         T: ?Sized + ser::Serialize,
     {
+        // Skip the indentation if this key is the first in a nested map
+        // inside a sequence, to follow the dash `-` directly.
         if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
         } else {
