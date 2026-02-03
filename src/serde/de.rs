@@ -9,10 +9,10 @@ use serde::de::{
 };
 use std::str::{Chars, FromStr};
 
-/// Deserialize an instance of type T from [`StrictYaml`](enum@crate::StrictYaml).
+/// Deserialize an instance of type `T` from [`StrictYaml`](enum@crate::StrictYaml).
 ///
 /// ```
-/// use strict_yaml_rust::{StrictYaml, strict_yaml::Hash, serde::from_strict_yaml};
+/// use strict_yaml_rust::{StrictYaml, serde::from_strict_yaml};
 ///
 /// let yaml = StrictYaml::Array(
 ///     vec![
@@ -94,7 +94,7 @@ impl<'de> Deserializer<'de> {
 ///
 /// As described above the [`from_str_many`] function deserializes a YAML stream containing
 /// multiple documents to a container data structure that implements
-/// [`serde::Deserialize`] (e.g. [`Vec`]).
+/// [`serde::Deserialize`] (such as [`Vec`] or [`VecDeque`](struct@std::collections::VecDeque)).
 ///
 ///
 /// ```rust
@@ -146,13 +146,12 @@ where
     T::deserialize(&mut deserializer)
 }
 
-/// Deserialize a YAML document into an instance of type `T`.
+/// Deserialize an instance of type `T` from a StrictYAML document.
 ///
 /// # Examples
 ///
-/// The [`from_str`] function deserializes a YAML document to a data structure
-/// that implements [`serde::Deserialize`].
-///
+/// The [`from_str`] function deserializes a data structure that
+/// implements [`serde::Deserialize`] from a StrictYAML document.
 ///
 /// ```rust
 /// use strict_yaml_rust::serde::from_str;
@@ -160,14 +159,14 @@ where
 ///
 /// #[derive(Deserialize)]
 /// struct Deployment {
-///   kind: String,
-///   spec: Spec
+///     kind: String,
+///     spec: Spec
 /// }
 ///
 /// #[derive(Deserialize)]
 /// struct Spec {
-///   replicas: u16,
-///   name: String
+///     replicas: u16,
+///     name: String
 /// }
 ///
 /// let yaml = r#"
@@ -175,7 +174,7 @@ where
 /// kind: deployment
 /// spec:
 ///   replicas: 5
-///   name: "nginx"
+///   name: nginx
 /// ...
 /// "#;
 ///

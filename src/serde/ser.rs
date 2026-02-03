@@ -9,10 +9,67 @@ use serde::ser::{
 };
 use std::fmt;
 
+/// Serialize an instance of type `T` to [`StrictYaml`](enum@crate::StrictYaml).
+///
+/// ```
+/// use strict_yaml_rust::{StrictYaml, serde::to_strict_yaml};
+///
+/// let v = vec![1, 2, 3];
+///
+/// let yaml = StrictYaml::Array(
+///     vec![
+///         StrictYaml::String("1".into()),
+///         StrictYaml::String("2".into()),
+///         StrictYaml::String("3".into())
+///     ]
+/// );
+///
+/// assert_eq!(yaml, to_strict_yaml(v).unwrap());
+/// ```
 pub fn to_strict_yaml<T: Serialize>(value: T) -> Result<StrictYaml, Error> {
     value.serialize(strict_yaml::serde::ser::Serializer)
 }
 
+/// Serialize an instance of type `T` to a StrictYAML document.
+///
+/// # Examples
+///
+/// The [`to_string`] function serializes a data structure that
+/// implements [`serde::Serialize`] to a StrictYAML document.
+///
+/// ```rust
+/// use strict_yaml_rust::serde::to_string;
+/// use serde::Serialize;
+///
+/// #[derive(Serialize)]
+/// struct Deployment {
+///     kind: &'static str,
+///     spec: Spec
+/// }
+///
+/// #[derive(Serialize)]
+/// struct Spec {
+///     replicas: u16,
+///     name: &'static str
+/// }
+///
+/// let deployment = Deployment {
+///     kind: "deployment",
+///     spec: Spec {
+///         replicas: 5,
+///         name: "nginx"
+///     }
+/// };
+///
+/// let output = r#"---
+/// kind: deployment
+/// spec:
+///   replicas: "5"
+///   name: nginx
+/// "#;
+///
+/// assert_eq!(output, to_string(&deployment).unwrap());
+/// ```
 pub fn to_string<T>(value: &T) -> Result<String, Error>
 where
     T: Serialize,
@@ -32,6 +89,80 @@ where
     Ok(out)
 }
 
+/// Serialize a container of type `T` to a StrictYAML document stream.
+///
+/// Similar to the deserialization function [`from_str_many`](function@crate::serde::from_str_many)
+/// this function serves as a hint to the serializer to serialize a
+/// container that implements [`serde::Serialize`] (such as [`Vec`] or
+/// [`VecDeque`](struct@std::collections::VecDeque) to a StrictYAML document stream.
+///
+/// In contrast [`to_string`] would serialize such a data structure to a single
+/// StrictYAML document containing an array at the root.
+///
+/// # Examples
+///
+/// As described above the [`to_string_many`] function serializes a
+/// data structure to a StrictYAML document stream containing multiple documents.
+///
+/// ```rust
+/// use strict_yaml_rust::serde::to_string_many;
+/// use serde::Serialize;
+///
+/// #[derive(Serialize)]
+/// struct Deployment {
+///     kind: &'static str,
+///     spec: Spec
+/// }
+///
+/// #[derive(Serialize)]
+/// struct Spec {
+///     replicas: u16,
+///     name: &'static str
+/// }
+///
+/// let output = r#"---
+/// kind: deployment
+/// spec:
+///   replicas: "5"
+///   name: nginx
+/// ---
+/// kind: container
+/// spec:
+///   replicas: "1"
+///   name: redis
+/// ---
+/// kind: deployment
+/// spec:
+///   replicas: "3"
+///   name: webapp
+/// "#;
+///
+/// let deployments = vec![
+///     Deployment {
+///         kind: "deployment",
+///         spec: Spec {
+///             replicas: 5,
+///             name: "nginx"
+///         }
+///     },
+///     Deployment {
+///         kind: "container",
+///         spec: Spec {
+///             replicas: 1,
+///             name: "redis"
+///         }
+///     },
+///     Deployment {
+///         kind: "deployment",
+///         spec: Spec {
+///             replicas: 3,
+///             name: "webapp"
+///         }
+///     },
+/// ];
+///
+/// assert_eq!(output, to_string_many(&deployments).unwrap());
+/// ```
 pub fn to_string_many<T>(value: &T) -> Result<String, Error>
 where
     T: Serialize,

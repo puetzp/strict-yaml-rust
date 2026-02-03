@@ -1,12 +1,8 @@
-//! Provides a [`serde`] implementation.
+//! This module provides a [`serde`] implementation.
 //!
 //! The functions in this module can be used to serialize data
 //! structures to StrictYAML and deserialize a data structure from
-//! a StrictYAML string.
-//!
-//! Note that this API is distinct from parsing a StrictYAML string
-//! to an instance of [`StrictYaml`](enum@crate::StrictYaml) and
-//! then possibly having to convert it into a stronger type.
+//! a StrictYAML document stream.
 
 pub mod de;
 pub mod error;
