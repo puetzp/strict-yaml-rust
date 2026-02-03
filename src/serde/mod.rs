@@ -617,65 +617,33 @@ spec:
     }
 
     #[test]
-    fn test_multiple_documents_de_ser() {
-        let input = r#"---
-foobar
----
-barfoo
----
-end
-"#;
-
-        let expected = vec![
-            "foobar".to_string(),
-            "barfoo".to_string(),
-            "end".to_string(),
-        ];
-
-        assert_eq!(expected, from_str_many::<Vec<String>>(input).unwrap());
-        assert_eq!(input, to_string_many(&expected).unwrap());
-
-        #[derive(Debug, Deserialize, PartialEq, Serialize)]
-        #[serde(deny_unknown_fields)]
-        struct Test {
-            a: String,
-            b: usize,
-            c: bool,
-        }
-
+    fn test_document_stream_de_ser() {
         let input = r#"---
 a: foo
-b: "50"
+b:
+  - |
+      test
+  - "true"
+  - - "1"
+    - "2"
 c: "true"
 ---
-a: bar
-b: "10"
-c: "false"
+- a
+- b:
+    c:
+      d: e
+      f:
+        - "true"
+        - |
+            1
+            2
+- foobar
 ---
-a: end
-b: "20"
-c: "false"
+the end
 "#;
 
-        let expected = vec![
-            Test {
-                a: "foo".to_string(),
-                b: 50,
-                c: true,
-            },
-            Test {
-                a: "bar".to_string(),
-                b: 10,
-                c: false,
-            },
-            Test {
-                a: "end".to_string(),
-                b: 20,
-                c: false,
-            },
-        ];
+        let yaml = from_str_many::<Vec<StrictYaml>>(input).unwrap();
 
-        assert_eq!(expected, from_str_many::<Vec<Test>>(input).unwrap());
-        assert_eq!(input, to_string_many(&expected).unwrap());
+        assert_eq!(input, to_string_many(&yaml).unwrap());
     }
 }

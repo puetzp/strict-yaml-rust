@@ -22,7 +22,6 @@ where
     let mut serializer = Serializer {
         emitter: StrictYamlEmitter::new(&mut out),
         scope: None,
-        multi_doc: false,
     };
 
     write!(serializer.emitter.writer, "---")?;
@@ -41,8 +40,7 @@ where
 
     let mut serializer = Serializer {
         emitter: StrictYamlEmitter::new(&mut out),
-        scope: None,
-        multi_doc: true,
+        scope: Some(Scope::Root),
     };
 
     value.serialize(&mut serializer)?;
@@ -61,7 +59,6 @@ enum Scope {
 pub struct Serializer<'a> {
     emitter: StrictYamlEmitter<'a>,
     scope: Option<Scope>,
-    multi_doc: bool,
 }
 
 fn write_str<T: fmt::Display>(
@@ -79,7 +76,11 @@ fn write_str<T: fmt::Display>(
         serializer.emitter.writer.write_char('|')?;
         writeln!(serializer.emitter.writer)?;
 
-        let level_delta = if serializer.emitter.level < 0 { 2 } else { 1 };
+        let level_delta = if serializer.emitter.level < 0 || serializer.scope == Some(Scope::Seq) {
+            2
+        } else {
+            1
+        };
 
         serializer.emitter.level += level_delta;
 
@@ -250,10 +251,6 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        if self.multi_doc && self.scope.is_none() {
-            self.scope = Some(Scope::Root);
-        }
-
         if self.scope != Some(Scope::Root) {
             if len == Some(0) {
                 write!(self.emitter.writer, "[]")?;
@@ -355,7 +352,10 @@ impl SerializeSeq for &'_ mut Serializer<'_> {
         if self.scope == Some(Scope::Root) {
             write!(self.emitter.writer, "---")?;
             writeln!(self.emitter.writer)?;
+
+            let mut old_scope = self.scope.take();
             value.serialize(&mut **self)?;
+            self.scope = old_scope.take();
         } else {
             if self.scope != Some(Scope::Seq) {
                 self.emitter.write_indent()?;
