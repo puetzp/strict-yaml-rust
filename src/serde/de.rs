@@ -103,14 +103,14 @@ impl<'de> Deserializer<'de> {
 ///
 /// #[derive(Deserialize)]
 /// struct Deployment {
-///   kind: String,
-///   spec: Spec
+///     kind: String,
+///     spec: Spec
 /// }
 ///
 /// #[derive(Deserialize)]
 /// struct Spec {
-///   replicas: u16,
-///   name: String
+///     replicas: u16,
+///     name: String
 /// }
 ///
 /// let yaml = r#"
