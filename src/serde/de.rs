@@ -31,6 +31,7 @@ where
     T::deserialize(yaml)
 }
 
+/// A deserializer for the StrictYAML document format.
 pub struct Deserializer<'de> {
     parser: Parser<Chars<'de>>,
     many: bool,
@@ -46,10 +47,13 @@ impl<'de> Deserializer<'de> {
         }
     }
 
+    /// See [`from_str_many`](function@crate::serde::from_str_many) for usage
+    /// examples.
     pub fn from_str_many(input: &'de str) -> Self {
         Deserializer::new(input, true)
     }
 
+    /// See [`from_str`](function@crate::serde::from_str) for usage examples.
     pub fn from_str(input: &'de str) -> Self {
         Deserializer::new(input, false)
     }

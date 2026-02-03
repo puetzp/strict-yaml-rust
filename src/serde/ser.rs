@@ -187,11 +187,24 @@ enum Scope {
     Seq,
 }
 
+/// A serializer for the StrictYAML document format.
 pub struct Serializer<'a> {
     emitter: StrictYamlEmitter<'a>,
     scope: Option<Scope>,
 }
 
+/// This function is used to serialize any kind of scalar types that are
+/// available in the serde data model.
+/// However there is some nuance to different types, e.g. a string might
+/// contain newlines which should be serialized as a multi-line YAML string,
+/// which also affects indentation.
+/// At the same time numeric types are exclusively single-line.
+///
+/// This function uses the quoting rules from `StrictYamlEmitter`.
+///
+/// It also writes a newline after serializing a scalar, except when the
+/// scalar is a map key, which might be followed by a scalar value on the
+/// same line.
 fn write_str<T: fmt::Display>(
     serializer: &mut Serializer,
     v: T,
@@ -207,6 +220,8 @@ fn write_str<T: fmt::Display>(
         serializer.emitter.writer.write_char('|')?;
         writeln!(serializer.emitter.writer)?;
 
+        // Indentation differs for multi-line strings depending
+        // on the context.
         let level_delta = if serializer.emitter.level < 0 || serializer.scope == Some(Scope::Seq) {
             2
         } else {
@@ -229,6 +244,9 @@ fn write_str<T: fmt::Display>(
             serializer.emitter.writer.write_str(&s)?;
         }
 
+        // This scope is set when the scalar is a map key
+        // in which case it may be followed by a scalar value
+        // on the same line and the newline is skipped.
         if serializer.scope != Some(Scope::Map) {
             writeln!(serializer.emitter.writer)?;
         }
@@ -241,6 +259,9 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     type Ok = ();
     type Error = Error;
 
+    // Since no extra state is needed to keep track of the
+    // serialization process, `Serializer` can implement every
+    // specified trait.
     type SerializeSeq = Self;
     type SerializeTuple = Self;
     type SerializeTupleStruct = Self;
@@ -346,6 +367,9 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         value.serialize(self)
     }
 
+    /// Newtypes are serialized as maps, i.e. `key: value`, where
+    /// `variant` is the key and the value is any type that implements
+    /// `Serialize`.
     fn serialize_newtype_variant<T>(
         self,
         _name: &'static str,
@@ -356,22 +380,30 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     where
         T: ?Sized + Serialize,
     {
+        // Start with a newline if the newtype enum is a nested value
+        // inside a map with a given key.
         if self.scope == Some(Scope::Key) {
             writeln!(self.emitter.writer)?;
         }
 
         self.emitter.level += 1;
 
+        // Skip indentation if the newtype enum is nested inside a
+        // sequence and the key/variant follows a dash `-`.
         if self.scope != Some(Scope::Seq) {
             self.emitter.write_indent()?;
         }
 
+        // Serialize the variant as if it were a key in a regular
+        // map.
         let mut old_scope = self.scope.replace(Scope::Map);
         variant.serialize(&mut *self)?;
         self.scope = old_scope.take();
 
         write!(self.emitter.writer, ":")?;
 
+        // Serialize the value as if it were a value in a regular
+        // map following a key.
         old_scope = self.scope.replace(Scope::Key);
         let v = value.serialize(&mut *self)?;
         self.scope = old_scope.take();
