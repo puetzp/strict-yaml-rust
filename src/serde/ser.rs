@@ -190,6 +190,10 @@ enum Scope {
 /// A serializer for the StrictYAML document format.
 pub struct Serializer<'a> {
     emitter: StrictYamlEmitter<'a>,
+    // This attribute is used to keep track of the parent
+    // node type in contexts where the parent node
+    // type affects serialization of the currently
+    // processed child node.
     scope: Option<Scope>,
 }
 
