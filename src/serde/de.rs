@@ -34,28 +34,26 @@ where
 /// A deserializer for the StrictYAML document format.
 pub struct Deserializer<'de> {
     parser: Parser<Chars<'de>>,
-    many: bool,
     is_root: Option<bool>,
 }
 
 impl<'de> Deserializer<'de> {
-    fn new(input: &'de str, many: bool) -> Self {
+    fn new(input: &'de str, is_root: Option<bool>) -> Self {
         Deserializer {
             parser: Parser::new(input.chars()),
-            many,
-            is_root: None,
+            is_root,
         }
     }
 
     /// See [`from_str_many`](function@crate::serde::from_str_many) for usage
     /// examples.
     pub fn from_str_many(input: &'de str) -> Self {
-        Deserializer::new(input, true)
+        Deserializer::new(input, Some(false))
     }
 
     /// See [`from_str`](function@crate::serde::from_str) for usage examples.
     pub fn from_str(input: &'de str) -> Self {
-        Deserializer::new(input, false)
+        Deserializer::new(input, None)
     }
 }
 
@@ -619,24 +617,21 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let mut is_root = false;
-
-        if self.many && self.is_root.is_none() {
+        if self.is_root == Some(false) {
             self.is_root = Some(true);
-            is_root = true;
         }
 
         let (ev, mark) = self.parser.next()?;
 
         let value = match ev {
             Event::SequenceStart(_) => visitor
-                .visit_seq(ArrayAccess::new(self, is_root))
+                .visit_seq(ArrayAccess::new(self))
                 .map_err(|err: Error| err + mark)?,
-            Event::StreamStart if self.many => visitor
-                .visit_seq(ArrayAccess::new(self, is_root))
+            Event::StreamStart if self.is_root.is_some() => visitor
+                .visit_seq(ArrayAccess::new(self))
                 .map_err(|err: Error| err + mark)?,
             _ => {
-                if self.many && is_root {
+                if self.is_root.is_some() {
                     return Err(Error::from_event(ev, mark, "the start of the stream"));
                 } else {
                     return Err(Error::from_event(ev, mark, "the start of a sequence"));
@@ -644,11 +639,10 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
             }
         };
 
-        if self.many && is_root {
+        if self.is_root == Some(true) {
             let (ev, mark) = self.parser.next()?;
 
             if ev != Event::StreamEnd {
-                self.is_root = Some(false);
                 return Err(Error::from_event(ev, mark, "the end of the stream"));
             }
         } else {
@@ -763,12 +757,12 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
 struct ArrayAccess<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
-    is_root: bool,
+    //    is_root: bool,
 }
 
 impl<'a, 'de> ArrayAccess<'a, 'de> {
-    fn new(de: &'a mut Deserializer<'de>, is_root: bool) -> Self {
-        Self { de, is_root }
+    fn new(de: &'a mut Deserializer<'de>) -> Self {
+        Self { de }
     }
 }
 
@@ -779,15 +773,17 @@ impl<'de, 'a> SeqAccess<'de> for ArrayAccess<'a, 'de> {
     where
         T: DeserializeSeed<'de>,
     {
-        let (ev, _mark) = self.de.parser.peek()?;
+        let (ev, mark) = self.de.parser.peek()?;
 
-        if self.de.many && self.is_root {
-            match ev {
+        if self.de.is_root == Some(true) {
+            let mut old_is_root = self.de.is_root.take();
+
+            let res = match ev {
                 Event::StreamEnd => Ok(None),
                 Event::DocumentStart => {
                     let _ = self.de.parser.next()?;
 
-                    let v = seed.deserialize(&mut *self.de).map(Some);
+                    let v = seed.deserialize(&mut *self.de).map(Some)?;
 
                     let (ev, _mark) = self.de.parser.peek()?;
 
@@ -795,10 +791,18 @@ impl<'de, 'a> SeqAccess<'de> for ArrayAccess<'a, 'de> {
                         let _ = self.de.parser.next()?;
                     }
 
-                    v
+                    Ok(v)
                 }
-                _ => unreachable!(),
-            }
+                _ => Err(Error::from_event(
+                    ev.clone(),
+                    *mark,
+                    "the start of a document or the end of the stream",
+                )),
+            };
+
+            self.de.is_root = old_is_root.take();
+
+            Ok(res?)
         } else {
             match ev {
                 Event::SequenceEnd => Ok(None),
