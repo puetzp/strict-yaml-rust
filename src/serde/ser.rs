@@ -854,7 +854,13 @@ impl SerializeStructVariant for &'_ mut Serializer<'_> {
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        self.emitter.level -= 1;
+        // After serializing a struct variant the indentation level
+        // needs to decrease by two, because the level is increased
+        // twice during the process:
+        // - before the key (variant) is serialized
+        // - after the method calls into `serialize_map` to serialize
+        //   its fields
+        self.emitter.level -= 2;
         Ok(())
     }
 }

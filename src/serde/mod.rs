@@ -290,57 +290,112 @@ d:
     #[test]
     fn test_enum_struct_variant_de_ser() {
         #[derive(Debug, Deserialize, PartialEq, Serialize)]
-        enum Test {
+        struct TestStruct {
+            first: TestEnum,
+            second: Vec<TestEnum>,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        enum TestEnum {
             #[serde(rename = "a")]
-            A { b: usize, c: bool, d: u8 },
+            A {
+                b: usize,
+                #[serde(default, skip_serializing_if = "Option::is_none")]
+                c: Option<bool>,
+                d: Vec<u8>,
+            },
         }
 
         let input = r#"---
-a:
-  b: "50"
-  c: "true"
-  d: "2"
+first:
+  a:
+    b: "50"
+    c: "true"
+    d:
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+second:
+  - a:
+      b: "50"
+      d:
+        - "1"
+        - "2"
+  - a:
+      b: "50"
+      c: "false"
+      d:
+        - "1"
+        - "2"
 "#;
 
-        let expected = Test::A {
-            b: 50,
-            c: true,
-            d: 2,
+        let expected = TestStruct {
+            first: TestEnum::A {
+                b: 50,
+                c: Some(true),
+                d: vec![1, 2, 3, 4],
+            },
+            second: vec![
+                TestEnum::A {
+                    b: 50,
+                    c: None,
+                    d: vec![1, 2],
+                },
+                TestEnum::A {
+                    b: 50,
+                    c: Some(false),
+                    d: vec![1, 2],
+                },
+            ],
         };
 
-        assert_eq!(expected, from_str::<Test>(input).unwrap());
+        assert_eq!(expected, from_str::<TestStruct>(input).unwrap());
         assert_eq!(input, to_string(&expected).unwrap());
     }
 
     #[test]
     fn test_enum_newtype_variant_de_ser() {
         #[derive(Debug, Deserialize, PartialEq, Serialize)]
-        enum Test {
+        struct TestStruct {
+            first: TestEnum,
+            second: Vec<TestEnum>,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        enum TestEnum {
             #[serde(rename = "a")]
             A(Vec<u8>),
             B(String),
         }
 
         let input = r#"---
-a:
-  - "1"
-  - "2"
+first:
+  a:
+    - "1"
+    - "2"
+second:
+  - B: |
+      foo
+      bar
+  - a:
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+  - B: "true"
 "#;
 
-        let expected = Test::A(vec![1, 2]);
+        let expected = TestStruct {
+            first: TestEnum::A(vec![1, 2]),
+            second: vec![
+                TestEnum::B("foo\nbar\n".to_string()),
+                TestEnum::A(vec![3, 4, 5, 6]),
+                TestEnum::B("true".to_string()),
+            ],
+        };
 
-        assert_eq!(expected, from_str::<Test>(input).unwrap());
-        assert_eq!(input, to_string(&expected).unwrap());
-
-        let input = r#"---
-B: |
-  foo
-  bar
-"#;
-
-        let expected = Test::B("foo\nbar\n".to_string());
-
-        assert_eq!(expected, from_str(input).unwrap());
+        assert_eq!(expected, from_str::<TestStruct>(input).unwrap());
         assert_eq!(input, to_string(&expected).unwrap());
     }
 
