@@ -757,7 +757,6 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
 struct ArrayAccess<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
-    //    is_root: bool,
 }
 
 impl<'a, 'de> ArrayAccess<'a, 'de> {
