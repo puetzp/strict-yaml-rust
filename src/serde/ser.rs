@@ -194,6 +194,9 @@ pub struct Serializer<'a> {
     // node type in contexts where the parent node
     // type affects serialization of the currently
     // processed child node.
+    // For example a map is serialized differently
+    // when it is a value inside another map or an
+    // item in a sequence.
     scope: Option<Scope>,
 }
 

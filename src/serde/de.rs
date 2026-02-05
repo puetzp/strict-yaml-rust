@@ -34,6 +34,10 @@ where
 /// A deserializer for the StrictYAML document format.
 pub struct Deserializer<'de> {
     parser: Parser<Chars<'de>>,
+    // This is used to toggle and keep track of multi-document
+    // deserialization. This is only relevant when deserializing a
+    // sequence because only sequence types can be deserialized
+    // from a StrictYAML stream containing multiple documents.
     is_root: Option<bool>,
 }
 
@@ -145,6 +149,11 @@ where
 {
     let mut deserializer = Deserializer::from_str_many(s);
 
+    // Unlike `from_str` this function skips matching the first
+    // events (`StreamStart` and `DocumentStart`) as well as their
+    // respective ends, because in this case handling multi-document
+    // deserialization is shifted to the `deserialize_seq` method instead.
+
     T::deserialize(&mut deserializer)
 }
 
@@ -190,6 +199,10 @@ where
 {
     let mut deserializer = Deserializer::from_str(s);
 
+    // This function expects only a single document inside a
+    // stream. Thus it tries to match the expected end events
+    // from the loader after deserializing the data "in between".
+
     let (ev, mark) = deserializer.parser.next()?;
 
     if ev != Event::StreamStart {
@@ -222,6 +235,12 @@ where
 impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     type Error = Error;
 
+    /// This is only called by custom visitor implementations when
+    /// the target type does not neatly fit into the serde data model.
+    ///
+    /// The `StrictYaml` enum type calls into this method to deserialize
+    /// efficiently by passing a custom visitor, since we know how
+    /// the serde data model types fit into the different variants.
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
@@ -582,6 +601,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
         }
     }
 
+    /// Allow deserializing the unit type from empty scalars.
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
@@ -613,16 +633,27 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
         visitor.visit_newtype_struct(self)
     }
 
+    /// This method is somewhat special since it needs to handle
+    /// two deserialization modes:
+    /// - deserializing a regular StrictYAML array
+    /// - deserializing a multi-document StrictYAML stream
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Error>
     where
         V: Visitor<'de>,
     {
+        // This is the expected value when multi-document deserialization
+        // is requested, which is driven by the first call into `deserialize_seq`.
         if self.is_root == Some(false) {
             self.is_root = Some(true);
         }
 
         let (ev, mark) = self.parser.next()?;
 
+        // Match the next event differently depending on the
+        // toggled deserialization mode.
+        // `ArrayAccess` is responsible for disabling this mode
+        // for nested calls into `deserialize_seq` to avoid toggling
+        // unintended behaviour.
         let value = match ev {
             Event::SequenceStart(_) => visitor
                 .visit_seq(ArrayAccess::new(self))
@@ -751,7 +782,7 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        visitor.visit_unit()
+        self.deserialize_any(visitor)
     }
 }
 
@@ -774,6 +805,12 @@ impl<'de, 'a> SeqAccess<'de> for ArrayAccess<'a, 'de> {
     {
         let (ev, mark) = self.de.parser.peek()?;
 
+        // When this instance of `ArrayAccess` is responsible for
+        // deserializing multiple documents, it needs to temporarily
+        // disable this "mode" for nested calls into `deserialize_*`
+        // methods. Otherwise a nested `deserialize_seq` would inherit
+        // this behaviour, but it needs to be scoped to the top-level
+        // sequence.
         if self.de.is_root == Some(true) {
             let mut old_is_root = self.de.is_root.take();
 
@@ -799,6 +836,8 @@ impl<'de, 'a> SeqAccess<'de> for ArrayAccess<'a, 'de> {
                 )),
             };
 
+            // Reset to the old value. It does not need to be set to
+            // `None`, although it would make no difference to process.
             self.de.is_root = old_is_root.take();
 
             Ok(res?)
