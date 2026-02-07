@@ -20,3 +20,6 @@ serde = { version = "1", features = ["derive"] }
 
 [features]
 serde = ["dep:serde", "linked-hash-map/serde_impl"]
+
+[package.metadata.docs.rs]
+all-features = true
