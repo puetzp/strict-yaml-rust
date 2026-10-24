@@ -336,7 +336,7 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        self.serialize_unit()
+        Ok(writeln!(self.emitter.writer)?)
     }
 
     fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>

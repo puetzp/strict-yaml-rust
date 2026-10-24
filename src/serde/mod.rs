@@ -195,6 +195,9 @@ foobar
             b: usize,
             c: bool,
             d: u8,
+            e: Option<bool>,
+            f: bool,
+            g: Option<Vec<bool>>,
         }
 
         let input = r#"---
@@ -202,6 +205,9 @@ a: foo
 b: "50"
 c: "true"
 d: "2"
+e:
+f: "false"
+g:
 "#;
 
         let expected = Test {
@@ -209,6 +215,9 @@ d: "2"
             b: 50,
             c: true,
             d: 2,
+            e: None,
+            f: false,
+            g: None,
         };
 
         assert_eq!(expected, from_str::<Test>(input).unwrap());
@@ -233,9 +242,17 @@ d: "2"
 
         #[derive(Debug, Deserialize, PartialEq, Serialize)]
         struct Sub {
-            x: bool,
-            y: String,
+            v: Option<SubSub>,
+            w: bool,
+            x: String,
+            y: Option<Vec<bool>>,
             z: i64,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        struct SubSub {
+            n: Option<Vec<usize>>,
+            m: bool,
         }
 
         let input = r#"---
@@ -252,10 +269,16 @@ c:
   - "12"
   - "false"
 d:
-  x: "false"
-  y: |
+  v:
+    n:
+    m: "true"
+  w: "false"
+  x: |
     foo
     bar
+  y:
+    - "true"
+    - "false"
   z: "6"
 "#;
 
@@ -277,9 +300,11 @@ d:
             ],
             c: (10, 12, false),
             d: Sub {
+                v: Some(SubSub { n: None, m: true }),
                 z: 6,
-                x: false,
-                y: "foo\nbar\n".to_string(),
+                w: false,
+                x: "foo\nbar\n".to_string(),
+                y: Some(vec![true, false]),
             },
         };
 

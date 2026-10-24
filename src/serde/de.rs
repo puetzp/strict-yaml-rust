@@ -589,15 +589,18 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
     {
         let (ev, _mark) = self.parser.peek()?;
 
-        let is_some = match ev {
-            Event::MappingStart(_) | Event::SequenceStart(_) | Event::Scalar(_, _, _) => true,
-            _ => false,
-        };
-
-        if is_some {
-            visitor.visit_some(self)
-        } else {
-            visitor.visit_none()
+        match ev {
+            Event::MappingStart(_) => visitor.visit_some(self),
+            Event::SequenceStart(_) => visitor.visit_some(self),
+            Event::Scalar(s, _, _) => {
+                if s.is_empty() {
+                    let _ = self.parser.next()?;
+                    visitor.visit_none()
+                } else {
+                    visitor.visit_some(self)
+                }
+            }
+            _ => visitor.visit_none(),
         }
     }
 
