@@ -20,6 +20,7 @@ mod test {
     use super::*;
     use crate::strict_yaml::StrictYaml;
     use serde::{Deserialize, Serialize};
+    use std::collections::HashMap;
 
     #[test]
     fn test_primitive_de_ser() {
@@ -199,6 +200,7 @@ foobar
             f: bool,
             g: Option<Vec<bool>>,
             h: Vec<usize>,
+            i: HashMap<String, String>,
         }
 
         let input = r#"---
@@ -210,6 +212,7 @@ e:
 f: "false"
 g:
 h:
+i:
 "#;
 
         let expected = Test {
@@ -221,6 +224,7 @@ h:
             f: false,
             g: None,
             h: vec![],
+            i: HashMap::new(),
         };
 
         assert_eq!(expected, from_str::<Test>(input).unwrap());
@@ -245,6 +249,7 @@ h:
 
         #[derive(Debug, Deserialize, PartialEq, Serialize)]
         struct Sub {
+            u: HashMap<String, String>,
             v: Option<SubSub>,
             w: bool,
             x: String,
@@ -272,6 +277,7 @@ c:
   - "12"
   - "false"
 d:
+  u:
   v:
     n:
     m: "true"
@@ -303,6 +309,7 @@ d:
             ],
             c: (10, 12, false),
             d: Sub {
+                u: HashMap::new(),
                 v: Some(SubSub { n: None, m: true }),
                 z: 6,
                 w: false,
@@ -321,6 +328,7 @@ d:
         struct TestStruct {
             first: TestEnum,
             second: Vec<TestEnum>,
+            third: Option<TestEnum>,
         }
 
         #[derive(Debug, Deserialize, PartialEq, Serialize)]
@@ -348,14 +356,13 @@ second:
   - a:
       b: "50"
       d:
-        - "1"
-        - "2"
   - a:
       b: "50"
       c: "false"
       d:
         - "1"
         - "2"
+third:
 "#;
 
         let expected = TestStruct {
@@ -368,7 +375,7 @@ second:
                 TestEnum::A {
                     b: 50,
                     c: None,
-                    d: vec![1, 2],
+                    d: vec![],
                 },
                 TestEnum::A {
                     b: 50,
@@ -376,6 +383,7 @@ second:
                     d: vec![1, 2],
                 },
             ],
+            third: None,
         };
 
         assert_eq!(expected, from_str::<TestStruct>(input).unwrap());

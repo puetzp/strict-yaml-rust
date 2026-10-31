@@ -422,11 +422,11 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         Ok(v)
     }
 
-    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
         // Unless the values in the sequence are serialized as
         // multiple documents (as indicated by `self.scope`), empty
         // sequences are serialized without any value.
-        if self.scope != Some(Scope::Root) && len != Some(0) {
+        if self.scope != Some(Scope::Root) {
             self.emitter.level += 1;
         }
 
@@ -490,12 +490,8 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
         self.serialize_seq(Some(len))
     }
 
-    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        if len == Some(0) {
-            write!(self.emitter.writer, "{{}}")?;
-        } else {
-            self.emitter.level += 1;
-        }
+    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+        self.emitter.level += 1;
 
         // When the map is nested inside another map the preceding
         // key must first be followed by a newline.

@@ -657,8 +657,8 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
         // `ArrayAccess` is responsible for disabling this mode
         // for nested calls into `deserialize_seq` to avoid toggling
         // unintended behaviour.
-        // Also empty scalars are deserialized to empty sequences. An
-        // additional boolean flag indicates to `ArrayAccess` to
+        // Also empty sequences can be deserialized from empty scalars.
+        // An additional boolean flag indicates to `ArrayAccess` to
         // return early in such cases.
         let value = match ev {
             Event::SequenceStart(_) => visitor
@@ -725,8 +725,13 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
         let value = match ev {
             Event::MappingStart(_) => visitor
-                .visit_map(HashAccess::new(self))
+                .visit_map(HashAccess::new(self, false))
                 .map_err(|err: Error| err + mark)?,
+            Event::Scalar(_, _, _) => {
+                return Ok(visitor
+                    .visit_map(HashAccess::new(self, true))
+                    .map_err(|err: Error| err + mark)?)
+            }
             _ => return Err(Error::from_event(ev, mark, "the start of a mapping")),
         };
 
@@ -804,12 +809,12 @@ struct ArrayAccess<'a, 'de: 'a> {
     // not in fact deserialize from a sequence and should not
     // expect the usual parser events. An empty scalar instead
     // corresponds to an empty sequence.
-    empty: bool,
+    return_early: bool,
 }
 
 impl<'a, 'de> ArrayAccess<'a, 'de> {
-    fn new(de: &'a mut Deserializer<'de>, empty: bool) -> Self {
-        Self { de, empty }
+    fn new(de: &'a mut Deserializer<'de>, return_early: bool) -> Self {
+        Self { de, return_early }
     }
 }
 
@@ -822,7 +827,7 @@ impl<'de, 'a> SeqAccess<'de> for ArrayAccess<'a, 'de> {
     {
         // Return early when this is primed by the caller
         // to be an empty sequence.
-        if self.empty {
+        if self.return_early {
             return Ok(None);
         }
 
@@ -875,11 +880,17 @@ impl<'de, 'a> SeqAccess<'de> for ArrayAccess<'a, 'de> {
 
 struct HashAccess<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
+    // This flag indicates an early return when the parser
+    // found an empty scalar and thus the deserializer does
+    // not in fact deserialize from a map and should not
+    // expect the usual parser events. An empty scalar instead
+    // corresponds to an empty map.
+    return_early: bool,
 }
 
 impl<'a, 'de> HashAccess<'a, 'de> {
-    fn new(de: &'a mut Deserializer<'de>) -> Self {
-        Self { de }
+    fn new(de: &'a mut Deserializer<'de>, return_early: bool) -> Self {
+        Self { de, return_early }
     }
 }
 
@@ -890,6 +901,10 @@ impl<'de, 'a> MapAccess<'de> for HashAccess<'a, 'de> {
     where
         T: DeserializeSeed<'de>,
     {
+        if self.return_early {
+            return Ok(None);
+        }
+
         let (ev, _mark) = self.de.parser.peek()?;
 
         match ev {
