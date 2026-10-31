@@ -425,13 +425,9 @@ impl ser::Serializer for &'_ mut Serializer<'_> {
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
         // Unless the values in the sequence are serialized as
         // multiple documents (as indicated by `self.scope`), empty
-        // sequences are serialized inline with empty brackets.
-        if self.scope != Some(Scope::Root) {
-            if len == Some(0) {
-                write!(self.emitter.writer, "[]")?;
-            } else {
-                self.emitter.level += 1;
-            }
+        // sequences are serialized without any value.
+        if self.scope != Some(Scope::Root) && len != Some(0) {
+            self.emitter.level += 1;
         }
 
         // A newline must come before a sequence when the sequence

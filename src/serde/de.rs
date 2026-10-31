@@ -657,12 +657,20 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
         // `ArrayAccess` is responsible for disabling this mode
         // for nested calls into `deserialize_seq` to avoid toggling
         // unintended behaviour.
+        // Also empty scalars are deserialized to empty sequences. An
+        // additional boolean flag indicates to `ArrayAccess` to
+        // return early in such cases.
         let value = match ev {
             Event::SequenceStart(_) => visitor
-                .visit_seq(ArrayAccess::new(self))
+                .visit_seq(ArrayAccess::new(self, false))
                 .map_err(|err: Error| err + mark)?,
+            Event::Scalar(_, _, _) => {
+                return Ok(visitor
+                    .visit_seq(ArrayAccess::new(self, true))
+                    .map_err(|err: Error| err + mark)?)
+            }
             Event::StreamStart if self.is_root.is_some() => visitor
-                .visit_seq(ArrayAccess::new(self))
+                .visit_seq(ArrayAccess::new(self, false))
                 .map_err(|err: Error| err + mark)?,
             _ => {
                 if self.is_root.is_some() {
@@ -791,11 +799,17 @@ impl<'de> serde::de::Deserializer<'de> for &mut Deserializer<'de> {
 
 struct ArrayAccess<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
+    // This flag indicates an early return when the parser
+    // found an empty scalar and thus the deserializer does
+    // not in fact deserialize from a sequence and should not
+    // expect the usual parser events. An empty scalar instead
+    // corresponds to an empty sequence.
+    empty: bool,
 }
 
 impl<'a, 'de> ArrayAccess<'a, 'de> {
-    fn new(de: &'a mut Deserializer<'de>) -> Self {
-        Self { de }
+    fn new(de: &'a mut Deserializer<'de>, empty: bool) -> Self {
+        Self { de, empty }
     }
 }
 
@@ -806,6 +820,12 @@ impl<'de, 'a> SeqAccess<'de> for ArrayAccess<'a, 'de> {
     where
         T: DeserializeSeed<'de>,
     {
+        // Return early when this is primed by the caller
+        // to be an empty sequence.
+        if self.empty {
+            return Ok(None);
+        }
+
         let (ev, mark) = self.de.parser.peek()?;
 
         // When this instance of `ArrayAccess` is responsible for

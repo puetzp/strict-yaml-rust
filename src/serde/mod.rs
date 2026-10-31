@@ -198,6 +198,7 @@ foobar
             e: Option<bool>,
             f: bool,
             g: Option<Vec<bool>>,
+            h: Vec<usize>,
         }
 
         let input = r#"---
@@ -208,6 +209,7 @@ d: "2"
 e:
 f: "false"
 g:
+h:
 "#;
 
         let expected = Test {
@@ -218,6 +220,7 @@ g:
             e: None,
             f: false,
             g: None,
+            h: vec![],
         };
 
         assert_eq!(expected, from_str::<Test>(input).unwrap());
